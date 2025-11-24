@@ -134,13 +134,17 @@ export type HexColor = typeof HexColorSchema.Type
  * General color string input schema (accepts various formats)
  *
  * Accepts hex, rgb(), hsl(), oklch(), etc. - anything culori can parse
+ * Also accepts hex colors without # prefix (e.g., "2D72D2")
  */
 export const ColorStringSchema = Schema.String.pipe(
   Schema.filter((value) => {
-    const parsed = culori.parse(value)
+    // Auto-add # to hex colors without it for validation
+    const normalizedValue = /^[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(value) ? `#${value}` : value
+    const parsed = culori.parse(normalizedValue)
     return parsed !== undefined
   }, {
-    message: () => "Invalid color: could not be parsed by culori"
+    message: () =>
+      "Invalid color: could not be parsed by culori. Try formats like: #2D72D2, 2D72D2, rgb(45, 114, 210), oklch(57% 0.15 259)"
   }),
   Schema.annotations({
     identifier: "ColorString",
@@ -160,7 +164,12 @@ export const parseColorStringToOKLCH = (
   colorString: string
 ): Effect.Effect<OKLCHColor, ColorParseError | ColorConversionError> =>
   Effect.gen(function*() {
-    const parsed = culori.parse(colorString)
+    // Normalize: add # to hex colors without it
+    const normalizedColor = /^[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(colorString)
+      ? `#${colorString}`
+      : colorString
+
+    const parsed = culori.parse(normalizedColor)
     if (!parsed) {
       return yield* Effect.fail(
         new ColorParseError({

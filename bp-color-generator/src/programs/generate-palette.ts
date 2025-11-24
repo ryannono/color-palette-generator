@@ -16,11 +16,7 @@ import { smoothPattern } from "../domain/math/interpolation.js"
 import { generatePaletteFromStop } from "../domain/palette/generator.js"
 import type { ColorSpace } from "../schemas/color.js"
 import { parseColorStringToOKLCH } from "../schemas/color.js"
-import {
-  GeneratedPaletteOutput,
-  type GeneratedPaletteOutput as GeneratedPaletteOutputType,
-  type GeneratePaletteInput
-} from "../schemas/generate-palette.js"
+import { GeneratedPaletteOutput, type GeneratePaletteInput } from "../schemas/generate-palette.js"
 import type { Palette } from "../schemas/palette.js"
 import { learnFromSinglePalette } from "./learn-patterns.js"
 
@@ -29,7 +25,7 @@ import { learnFromSinglePalette } from "./learn-patterns.js"
  */
 export const generatePalette = (
   input: GeneratePaletteInput
-): Effect.Effect<GeneratedPaletteOutputType, ColorConversionError | ParseError | Error> =>
+): Effect.Effect<GeneratedPaletteOutput, ColorConversionError | ParseError | Error> =>
   Effect.gen(function*() {
     const { anchorStop, inputColor, outputFormat, paletteName, patternSource } = input
     // Step 1: Parse input color to OKLCH
