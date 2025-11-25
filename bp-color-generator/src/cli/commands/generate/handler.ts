@@ -6,6 +6,7 @@
 
 import * as clack from "@clack/prompts"
 import { Effect, Either, Option as O } from "effect"
+import { ConfigService } from "../../../services/ConfigService.js"
 import { parseBatchPairsInput, type ParsedPair } from "../../parse-batch-input.js"
 import { promptForBatchInputMode, promptForBatchPaste } from "../../prompts.js"
 import { handleBatchMode } from "./batch-handler.js"
@@ -22,7 +23,7 @@ export const handleGenerate = ({
   exportPath,
   formatOpt,
   nameOpt,
-  pattern,
+  patternOpt,
   stopOpt
 }: {
   colorOpt: O.Option<string>
@@ -30,10 +31,13 @@ export const handleGenerate = ({
   exportPath: O.Option<string>
   formatOpt: O.Option<string>
   nameOpt: O.Option<string>
-  pattern: string
+  patternOpt: O.Option<string>
   stopOpt: O.Option<number>
 }) =>
   Effect.gen(function*() {
+    // Get pattern from option or config
+    const config = yield* ConfigService
+    const pattern = O.isSome(patternOpt) ? O.getOrThrow(patternOpt) : yield* config.getPatternSource()
     // Determine if interactive mode
     const hasColorInput = O.isSome(colorOpt)
     const isInteractive = !hasColorInput || O.isSome(stopOpt) === false

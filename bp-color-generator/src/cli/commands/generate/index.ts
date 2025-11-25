@@ -52,8 +52,8 @@ const nameOption = Options.text("name").pipe(
  */
 const patternOption = Options.text("pattern").pipe(
   Options.withAlias("p"),
-  Options.withDefault("test/fixtures/palettes/example-blue.json"),
-  Options.withDescription("Pattern source file path")
+  Options.optional,
+  Options.withDescription("Pattern source file path (defaults to config)")
 )
 
 /**
@@ -88,14 +88,14 @@ export const generate = Command.make("generate", {
   stop: stopOption
 }).pipe(
   Command.withHandler(
-    ({ color: colorOpt, export: exportOpt, exportPath, format: formatOpt, name: nameOpt, pattern, stop: stopOpt }) =>
+    ({ color: colorOpt, export: exportOpt, exportPath, format: formatOpt, name: nameOpt, pattern: patternOpt, stop: stopOpt }) =>
       handleGenerate({
         colorOpt,
         exportOpt,
         exportPath,
         formatOpt,
         nameOpt,
-        pattern,
+        patternOpt,
         stopOpt
       })
   ),
