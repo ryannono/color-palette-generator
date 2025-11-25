@@ -17,7 +17,7 @@
     "bp-colors": "./build/esm/cli/index.js"
   },
   "scripts": {
-    "dev": "tsx src/cli/index.ts",
+    "dev": "tsx src/cli/index.ts generate",
     "codegen": "build-utils prepare-v2",
     "build": "pnpm build-esm && pnpm build-annotate && pnpm build-cjs && build-utils pack-v2",
     "build-esm": "tsc -b tsconfig.build.json",
