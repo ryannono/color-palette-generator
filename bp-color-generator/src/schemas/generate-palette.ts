@@ -15,14 +15,12 @@ export const GeneratePaletteInputSchema = Schema.Struct({
   inputColor: ColorStringSchema,
   anchorStop: StopPositionSchema,
   outputFormat: ColorSpaceSchema,
-  paletteName: Schema.String.pipe(
-    Schema.propertySignature,
-    Schema.withConstructorDefault(() => "generated")
-  ),
-  patternSource: Schema.String.pipe(
-    Schema.propertySignature,
-    Schema.withConstructorDefault(() => "test/fixtures/palettes/example-blue.json")
-  )
+  paletteName: Schema.optionalWith(Schema.String, {
+    default: () => "generated"
+  }),
+  patternSource: Schema.optionalWith(Schema.String, {
+    default: () => "test/fixtures/palettes/example-blue.json"
+  })
 }).pipe(
   Schema.annotations({
     identifier: "GeneratePaletteInput",

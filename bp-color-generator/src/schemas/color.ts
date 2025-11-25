@@ -46,14 +46,17 @@ export const OKLCHColorSchema = Schema.Struct({
       description: "Hue angle in degrees [0, 360)"
     })
   ),
-  alpha: Schema.Number.pipe(
-    Schema.greaterThanOrEqualTo(0),
-    Schema.lessThanOrEqualTo(1),
-    Schema.annotations({
-      title: "Alpha",
-      description: "Transparency from 0 (transparent) to 1 (opaque)"
-    })
-  ).pipe(Schema.propertySignature, Schema.withConstructorDefault(() => 1))
+  alpha: Schema.optionalWith(
+    Schema.Number.pipe(
+      Schema.greaterThanOrEqualTo(0),
+      Schema.lessThanOrEqualTo(1),
+      Schema.annotations({
+        title: "Alpha",
+        description: "Transparency from 0 (transparent) to 1 (opaque)"
+      })
+    ),
+    { default: () => 1 }
+  )
 }).pipe(
   Schema.annotations({
     identifier: "OKLCHColor",
@@ -91,11 +94,14 @@ export const RGBColorSchema = Schema.Struct({
     Schema.lessThanOrEqualTo(255),
     Schema.annotations({ title: "Blue" })
   ),
-  alpha: Schema.Number.pipe(
-    Schema.greaterThanOrEqualTo(0),
-    Schema.lessThanOrEqualTo(1),
-    Schema.annotations({ title: "Alpha" })
-  ).pipe(Schema.propertySignature, Schema.withConstructorDefault(() => 1))
+  alpha: Schema.optionalWith(
+    Schema.Number.pipe(
+      Schema.greaterThanOrEqualTo(0),
+      Schema.lessThanOrEqualTo(1),
+      Schema.annotations({ title: "Alpha" })
+    ),
+    { default: () => 1 }
+  )
 }).pipe(
   Schema.annotations({
     identifier: "RGBColor",
@@ -221,11 +227,14 @@ export const OKLABColorSchema = Schema.Struct({
   b: Schema.Number.pipe(
     Schema.annotations({ title: "Blue-Yellow axis" })
   ),
-  alpha: Schema.Number.pipe(
-    Schema.greaterThanOrEqualTo(0),
-    Schema.lessThanOrEqualTo(1),
-    Schema.annotations({ title: "Alpha" })
-  ).pipe(Schema.propertySignature, Schema.withConstructorDefault(() => 1))
+  alpha: Schema.optionalWith(
+    Schema.Number.pipe(
+      Schema.greaterThanOrEqualTo(0),
+      Schema.lessThanOrEqualTo(1),
+      Schema.annotations({ title: "Alpha" })
+    ),
+    { default: () => 1 }
+  )
 }).pipe(
   Schema.annotations({
     identifier: "OKLABColor",
