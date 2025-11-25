@@ -7,7 +7,7 @@
   "description": "OKLCH-based color palette generator with Effect-ts",
   "repository": {
     "type": "git",
-    "url": "<PLACEHOLDER>"
+    "url": "https://github.com/ryannono/color-palette-generator"
   },
   "publishConfig": {
     "access": "public",
