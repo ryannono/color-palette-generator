@@ -11,6 +11,9 @@
 
 Color Palette Generator is a sophisticated CLI tool that generates complete 10-stop color palettes (100-1000) from a single color input. It uses machine learning-inspired pattern extraction to ensure consistent, perceptually uniform color progressions across all palette stops.
 
+https://github.com/user-attachments/assets/ad7047a2-58d7-4f9d-9b15-3b7136bf3d4f
+
+
 ### Key Features
 
 - **Perceptually Uniform**: Uses OKLCH color space for consistent lightness and chroma progression
