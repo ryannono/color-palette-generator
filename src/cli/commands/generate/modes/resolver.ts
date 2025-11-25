@@ -12,7 +12,6 @@ import { ColorString } from "../../../../schemas/color.js"
 import { StopPosition } from "../../../../schemas/palette.js"
 import { parseBatchPairsInput } from "../parsers/batch-parser.js"
 import {
-  isOneToManyTransformation,
   isTransformationSyntax,
   parseAnyTransformation,
   parseBatchTransformations
@@ -55,36 +54,28 @@ const detectTransformationMode = (
   colorInput: string
 ): Effect.Effect<ExecutionMode, ParseError | TransformationParseError> =>
   Effect.gen(function*() {
-    // Check for one-to-many transformation: ref>(t1,t2)::stop
-    if (isOneToManyTransformation(colorInput)) {
-      const batch = yield* parseAnyTransformation(colorInput)
-
-      if ("targets" in batch) {
-        // ManyTransformMode
-        const mode = yield* ManyTransformMode({
-          _tag: "ManyTransform",
-          reference: batch.reference,
-          targets: batch.targets,
-          stop: batch.stop
-        })
-        return mode
-      } else {
-        // Single transformation parsed as batch
-        const mode = yield* SingleTransformMode({
-          _tag: "SingleTransform",
-          input: batch
-        })
-        return mode
-      }
-    }
-
-    // Check for batch transformations (comma or newline separated)
+    // Check for batch transformations FIRST (comma or newline separated)
+    // Must check this before one-to-many to avoid treating ", " after parens as part of transformation
     if (colorInput.includes(",") || colorInput.includes("\n")) {
       const transformations = yield* parseBatchTransformations(colorInput)
 
       if (transformations.length === 1) {
         const single = transformations[0]!
         if ("targets" in single) {
+          // Validate required fields
+          if (
+            !single.reference ||
+            !single.targets ||
+            single.targets.length === 0
+          ) {
+            return yield* Effect.fail(
+              new TransformationParseError({
+                input: colorInput,
+                reason: "Invalid transformation syntax: reference and targets are required"
+              })
+            )
+          }
+
           const mode = yield* ManyTransformMode({
             _tag: "ManyTransform",
             reference: single.reference,
@@ -101,11 +92,30 @@ const detectTransformationMode = (
         }
       }
 
-      // Multiple transformations
-      const inputs = transformations.filter((t) => !("targets" in t))
+      // Multiple transformations - accept both single and one-to-many
+      // Filter out any with missing required fields (reference/targets/target)
+      const validInputs = transformations.filter((t) => {
+        if ("targets" in t) {
+          return t.reference && t.targets && t.targets.length > 0
+        } else {
+          return t.reference && "target" in t && t.target
+        }
+      })
+
+      if (validInputs.length === 0) {
+        return yield* Effect.fail(
+          new TransformationParseError({
+            input: colorInput,
+            reason: "No valid transformations found"
+          })
+        )
+      }
+
+      // Allow both single and one-to-many transformations in batch
+      // Handler will prompt for any missing stops
       const mode = yield* BatchTransformMode({
         _tag: "BatchTransform",
-        transformations: inputs
+        transformations: validInputs
       })
       return mode
     }
@@ -243,14 +253,17 @@ const detectModeImpl = (
  * }).pipe(Effect.provide(ModeResolver.Default))
  * ```
  */
-export class ModeResolver extends Effect.Service<ModeResolver>()("ModeResolver", {
-  effect: Effect.succeed({
-    /**
-     * Detect execution mode from CLI inputs
-     */
-    detectMode: detectModeImpl
-  })
-}) {
+export class ModeResolver extends Effect.Service<ModeResolver>()(
+  "ModeResolver",
+  {
+    effect: Effect.succeed({
+      /**
+       * Detect execution mode from CLI inputs
+       */
+      detectMode: detectModeImpl
+    })
+  }
+) {
   /**
    * Test layer with same implementation as Default
    */

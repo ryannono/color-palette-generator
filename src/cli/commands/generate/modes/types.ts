@@ -7,7 +7,11 @@
 import { Schema } from "effect"
 import { ColorStringSchema } from "../../../../schemas/color.js"
 import { StopPositionSchema } from "../../../../schemas/palette.js"
-import { TransformationInputSchema } from "../../../../schemas/transformation.js"
+import {
+  PartialTransformationBatchSchema,
+  TransformationBatchSchema,
+  TransformationInputSchema
+} from "../../../../schemas/transformation.js"
 
 /**
  * Single palette generation mode
@@ -43,11 +47,12 @@ export const BatchPalettesModeSchema = Schema.Struct({
 )
 
 /**
- * Single transformation mode (ref>target::stop)
+ * Single transformation mode (ref>target[::stop])
+ * Note: stop can be undefined - handler will prompt for it
  */
 export const SingleTransformModeSchema = Schema.Struct({
   _tag: Schema.Literal("SingleTransform"),
-  input: TransformationInputSchema
+  input: Schema.Union(TransformationInputSchema, TransformationInputSchema.pipe(Schema.partial))
 }).pipe(
   Schema.annotations({
     identifier: "SingleTransformMode",
@@ -56,13 +61,14 @@ export const SingleTransformModeSchema = Schema.Struct({
 )
 
 /**
- * One-to-many transformation mode (ref>(t1,t2,t3)::stop)
+ * One-to-many transformation mode (ref>(t1,t2,t3)[::stop])
+ * Note: stop can be undefined - executor will prompt for it
  */
 export const ManyTransformModeSchema = Schema.Struct({
   _tag: Schema.Literal("ManyTransform"),
   reference: ColorStringSchema,
   targets: Schema.Array(ColorStringSchema).pipe(Schema.minItems(1)),
-  stop: StopPositionSchema
+  stop: Schema.optional(StopPositionSchema)
 }).pipe(
   Schema.annotations({
     identifier: "ManyTransformMode",
@@ -72,10 +78,20 @@ export const ManyTransformModeSchema = Schema.Struct({
 
 /**
  * Batch transformation mode (multiple transformations)
+ * Note: transformations can be partial (missing stop) - handler will prompt for them
+ * Supports mixing single transformations and one-to-many transformations
  */
 export const BatchTransformModeSchema = Schema.Struct({
   _tag: Schema.Literal("BatchTransform"),
-  transformations: Schema.Array(TransformationInputSchema).pipe(Schema.minItems(1))
+  transformations: Schema.Array(
+    Schema.Union(
+      // Try more specific schemas first (with more required fields)
+      TransformationBatchSchema,
+      PartialTransformationBatchSchema,
+      TransformationInputSchema,
+      TransformationInputSchema.pipe(Schema.partial)
+    )
+  ).pipe(Schema.minItems(1))
 }).pipe(
   Schema.annotations({
     identifier: "BatchTransformMode",

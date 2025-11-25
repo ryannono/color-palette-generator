@@ -6,6 +6,7 @@
 
 import * as clack from "@clack/prompts"
 import { Effect, Option as O } from "effect"
+import type { TransformationBatch, TransformationInput } from "../../../schemas/transformation.js"
 import { ConfigService } from "../../../services/ConfigService.js"
 import {
   promptForAnotherTransformation,
@@ -73,7 +74,11 @@ export const handleGenerate = ({
     const willPrompt = isInteractive ||
       O.isNone(formatOpt) ||
       O.isNone(nameOpt) ||
-      (mode._tag === "SinglePalette" && O.isNone(stopOpt))
+      (mode._tag === "SinglePalette" && O.isNone(stopOpt)) ||
+      (mode._tag === "SingleTransform" && mode.input.stop === undefined) ||
+      (mode._tag === "ManyTransform" && !mode.stop) ||
+      (mode._tag === "BatchTransform" &&
+        mode.transformations.some((t) => t.stop === undefined))
 
     // Show intro before any prompts
     if (willPrompt) {
@@ -160,24 +165,56 @@ export const handleGenerate = ({
           formatOpt,
           isInteractive,
           nameOpt,
-          pairs: mode.pairs.map((p) => ({ color: p.color, stop: p.stop, raw: `${p.color}::${p.stop}` })),
+          pairs: mode.pairs.map((p) => ({
+            color: p.color,
+            stop: p.stop,
+            raw: `${p.color}::${p.stop}`
+          })),
           pattern
         })
         break
 
-      case "SingleTransform":
+      case "SingleTransform": {
+        // Prompt for stop if missing
+        let input: TransformationInput
+        if (
+          mode.input.reference &&
+          mode.input.target &&
+          mode.input.stop !== undefined
+        ) {
+          input = {
+            reference: mode.input.reference,
+            target: mode.input.target,
+            stop: mode.input.stop
+          }
+        } else if (mode.input.reference && mode.input.target) {
+          const stop = yield* promptForStop()
+          input = {
+            reference: mode.input.reference,
+            target: mode.input.target,
+            stop
+          }
+        } else {
+          // This shouldn't happen as parser validates required fields
+          throw new Error("Invalid transformation: missing reference or target")
+        }
+
         result = yield* handleSingleTransformation({
           exportOpt,
           exportPath,
           formatOpt,
-          input: mode.input,
-          isInteractive,
+          input,
+          isInteractive: isInteractive || mode.input.stop === undefined,
           nameOpt,
           pattern
         })
         break
+      }
 
-      case "ManyTransform":
+      case "ManyTransform": {
+        // Prompt for stop if missing
+        const stop = mode.stop ?? (yield* promptForStop())
+
         result = yield* handleOneToManyTransformation({
           exportOpt,
           exportPath,
@@ -185,25 +222,95 @@ export const handleGenerate = ({
           input: {
             reference: mode.reference,
             targets: mode.targets,
-            stop: mode.stop
+            stop
           },
-          isInteractive,
+          isInteractive: isInteractive || !mode.stop,
           nameOpt,
           pattern
         })
         break
+      }
 
-      case "BatchTransform":
+      case "BatchTransform": {
+        // Complete any partial transformations by prompting for missing stops
+        const completedInputs: Array<TransformationInput | TransformationBatch> = []
+        let hadPartial = false
+        let transformationIndex = 0
+
+        for (const transformation of mode.transformations) {
+          transformationIndex++
+
+          if ("targets" in transformation && transformation.targets) {
+            // One-to-many transformation
+            if (
+              transformation.reference &&
+              transformation.targets.length > 0 &&
+              transformation.stop !== undefined
+            ) {
+              // Already complete
+              completedInputs.push({
+                reference: transformation.reference,
+                targets: transformation.targets,
+                stop: transformation.stop
+              })
+            } else if (
+              transformation.reference &&
+              transformation.targets.length > 0
+            ) {
+              // Missing stop - prompt for it with context
+              hadPartial = true
+              const transformationDesc = `${transformation.reference}>(${transformation.targets.join(", ")})`
+              const stop = yield* promptForStop(
+                transformationDesc,
+                transformationIndex
+              )
+              completedInputs.push({
+                reference: transformation.reference,
+                targets: transformation.targets,
+                stop
+              })
+            }
+          } else if ("target" in transformation && transformation.target) {
+            // Single transformation
+            if (
+              transformation.reference &&
+              transformation.target &&
+              transformation.stop !== undefined
+            ) {
+              // Already complete
+              completedInputs.push({
+                reference: transformation.reference,
+                target: transformation.target,
+                stop: transformation.stop
+              })
+            } else if (transformation.reference && transformation.target) {
+              // Missing stop - prompt for it with context
+              hadPartial = true
+              const transformationDesc = `${transformation.reference}>${transformation.target}`
+              const stop = yield* promptForStop(
+                transformationDesc,
+                transformationIndex
+              )
+              completedInputs.push({
+                reference: transformation.reference,
+                target: transformation.target,
+                stop
+              })
+            }
+          }
+        }
+
         result = yield* handleBatchTransformations({
           exportOpt,
           exportPath,
           formatOpt,
-          inputs: [...mode.transformations],
-          isInteractive,
+          inputs: completedInputs,
+          isInteractive: isInteractive || hadPartial,
           nameOpt,
           pattern
         })
         break
+      }
     }
 
     // Show outro after everything is complete

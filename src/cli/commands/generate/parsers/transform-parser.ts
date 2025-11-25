@@ -10,8 +10,15 @@
 import { Effect } from "effect"
 import { ParseError } from "effect/ParseResult"
 import { TransformationParseError } from "../../../../domain/color/errors.js"
-import type { TransformationBatch, TransformationInput } from "../../../../schemas/transformation.js"
+import type {
+  PartialTransformationBatch,
+  PartialTransformationInput,
+  TransformationBatch,
+  TransformationInput
+} from "../../../../schemas/transformation.js"
 import {
+  PartialTransformationBatch as PartialTransformationBatchDecoder,
+  PartialTransformationInput as PartialTransformationInputDecoder,
   TransformationBatch as TransformationBatchDecoder,
   TransformationInput as TransformationInputDecoder
 } from "../../../../schemas/transformation.js"
@@ -23,13 +30,17 @@ import {
  * - ref>target::stop → "2D72D2>238551::500"
  * - ref>target:stop  → "2D72D2>238551:500"
  * - ref>target stop  → "2D72D2>238551 500"
+ * - ref>target       → "2D72D2>238551" (partial, stop will be prompted for)
  *
  * @param input - Raw transformation string
  * @returns Effect with parsed transformation or parse error
  */
 export const parseTransformationString = (
   input: string
-): Effect.Effect<TransformationInput, TransformationParseError | ParseError> =>
+): Effect.Effect<
+  TransformationInput | PartialTransformationInput,
+  TransformationParseError | ParseError
+> =>
   Effect.gen(function*() {
     const trimmed = input.trim()
 
@@ -92,12 +103,11 @@ export const parseTransformationString = (
     }
 
     if (!stopStr) {
-      return yield* Effect.fail(
-        new TransformationParseError({
-          input: trimmed,
-          reason: "Invalid transformation syntax: stop position is required"
-        })
-      )
+      // Return partial transformation (stop will be prompted for)
+      return yield* PartialTransformationInputDecoder({
+        reference,
+        target
+      })
     }
 
     const stop = parseInt(stopStr, 10)
@@ -122,12 +132,19 @@ export const parseTransformationString = (
  */
 export const parseOneToManyTransformation = (
   input: string
-): Effect.Effect<TransformationBatch, TransformationParseError | ParseError> =>
+): Effect.Effect<
+  TransformationBatch | PartialTransformationBatch,
+  TransformationParseError | ParseError
+> =>
   Effect.gen(function*() {
     const trimmed = input.trim()
 
     // Check for > operator and parentheses
-    if (!trimmed.includes(">") || !trimmed.includes("(") || !trimmed.includes(")")) {
+    if (
+      !trimmed.includes(">") ||
+      !trimmed.includes("(") ||
+      !trimmed.includes(")")
+    ) {
       return yield* Effect.fail(
         new TransformationParseError({
           input: trimmed,
@@ -194,12 +211,11 @@ export const parseOneToManyTransformation = (
     }
 
     if (!stopStr) {
-      return yield* Effect.fail(
-        new TransformationParseError({
-          input: trimmed,
-          reason: "Stop position is required after targets"
-        })
-      )
+      // Return partial transformation batch (stop will be prompted for)
+      return yield* PartialTransformationBatchDecoder({
+        reference,
+        targets
+      })
     }
 
     const stop = parseInt(stopStr, 10)
@@ -224,7 +240,9 @@ export const isTransformationSyntax = (input: string): boolean => {
  */
 export const isOneToManyTransformation = (input: string): boolean => {
   const trimmed = input.trim()
-  return trimmed.includes(">") && trimmed.includes("(") && trimmed.includes(")")
+  return (
+    trimmed.includes(">") && trimmed.includes("(") && trimmed.includes(")")
+  )
 }
 
 /**
@@ -235,7 +253,13 @@ export const isOneToManyTransformation = (input: string): boolean => {
  */
 export const parseAnyTransformation = (
   input: string
-): Effect.Effect<TransformationInput | TransformationBatch, TransformationParseError | ParseError> =>
+): Effect.Effect<
+  | TransformationInput
+  | TransformationBatch
+  | PartialTransformationInput
+  | PartialTransformationBatch,
+  TransformationParseError | ParseError
+> =>
   Effect.gen(function*() {
     if (isOneToManyTransformation(input)) {
       return yield* parseOneToManyTransformation(input)
@@ -291,7 +315,10 @@ const splitByCommaOutsideParens = (input: string): Array<string> => {
  */
 export const parseBatchTransformations = (
   input: string
-): Effect.Effect<Array<TransformationInput | TransformationBatch>, TransformationParseError | ParseError> => {
+): Effect.Effect<
+  Array<TransformationInput | TransformationBatch | PartialTransformationInput | PartialTransformationBatch>,
+  TransformationParseError | ParseError
+> => {
   // Split by newlines first
   const lines = input
     .split(/\n/)
@@ -302,8 +329,7 @@ export const parseBatchTransformations = (
   const allInputs = lines.flatMap((line) => splitByCommaOutsideParens(line))
 
   // Parse each input
-  return Effect.all(
-    allInputs.map(parseAnyTransformation),
-    { concurrency: "unbounded" }
-  )
+  return Effect.all(allInputs.map(parseAnyTransformation), {
+    concurrency: "unbounded"
+  })
 }

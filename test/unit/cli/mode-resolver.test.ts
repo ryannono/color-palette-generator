@@ -140,7 +140,7 @@ describe("ModeResolver Service", () => {
   })
 
   describe("Single Transformation Mode Detection", () => {
-    it("should detect single transformation mode", () =>
+    it("should detect single transformation mode with stop", () =>
       Effect.gen(function*() {
         const resolver = yield* ModeResolver
         const result = yield* resolver.detectMode({
@@ -163,6 +163,29 @@ describe("ModeResolver Service", () => {
         }
       }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
 
+    it("should detect single transformation mode without stop (partial)", () =>
+      Effect.gen(function*() {
+        const resolver = yield* ModeResolver
+        const result = yield* resolver.detectMode({
+          colorOpt: O.some("555555>666666"),
+          stopOpt: O.none(),
+          formatOpt: O.none(),
+          nameOpt: O.none(),
+          patternOpt: O.none(),
+          exportOpt: O.none(),
+          exportPath: O.none()
+        })
+
+        expect(result.isInteractive).toBe(false)
+        expect(result.mode._tag).toBe("SingleTransform")
+
+        if (result.mode._tag === "SingleTransform") {
+          expect(result.mode.input.reference).toContain("555555")
+          expect(result.mode.input.target).toContain("666666")
+          expect(result.mode.input.stop).toBeUndefined()
+        }
+      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+
     it("should handle transformation with # prefix", () =>
       Effect.gen(function*() {
         const resolver = yield* ModeResolver
@@ -182,7 +205,7 @@ describe("ModeResolver Service", () => {
   })
 
   describe("Many Transformation Mode Detection", () => {
-    it("should detect one-to-many transformation mode", () =>
+    it("should detect one-to-many transformation mode with stop", () =>
       Effect.gen(function*() {
         const resolver = yield* ModeResolver
         const result = yield* resolver.detectMode({
@@ -206,10 +229,37 @@ describe("ModeResolver Service", () => {
           expect(result.mode.stop).toBe(500)
         }
       }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+
+    it("should detect one-to-many transformation mode without stop (partial)", () =>
+      Effect.gen(function*() {
+        const resolver = yield* ModeResolver
+        const result = yield* resolver.detectMode({
+          colorOpt: O.some("BD5200>(2D72D2, #238551, BD5200, #CD4246)"),
+          stopOpt: O.none(),
+          formatOpt: O.none(),
+          nameOpt: O.none(),
+          patternOpt: O.none(),
+          exportOpt: O.none(),
+          exportPath: O.none()
+        })
+
+        expect(result.isInteractive).toBe(false)
+        expect(result.mode._tag).toBe("ManyTransform")
+
+        if (result.mode._tag === "ManyTransform") {
+          expect(result.mode.reference).toContain("BD5200")
+          expect(result.mode.targets).toHaveLength(4)
+          expect(result.mode.targets[0]).toContain("2D72D2")
+          expect(result.mode.targets[1]).toContain("238551")
+          expect(result.mode.targets[2]).toContain("BD5200")
+          expect(result.mode.targets[3]).toContain("CD4246")
+          expect(result.mode.stop).toBeUndefined()
+        }
+      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
   })
 
   describe("Batch Transformation Mode Detection", () => {
-    it("should detect batch transformation mode from comma-separated", () =>
+    it("should detect batch transformation mode from comma-separated with stops", () =>
       Effect.gen(function*() {
         const resolver = yield* ModeResolver
         const result = yield* resolver.detectMode({
@@ -227,6 +277,70 @@ describe("ModeResolver Service", () => {
 
         if (result.mode._tag === "BatchTransform") {
           expect(result.mode.transformations).toHaveLength(2)
+        }
+      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+
+    it("should detect batch transformation mode without stops (partial)", () =>
+      Effect.gen(function*() {
+        const resolver = yield* ModeResolver
+        const result = yield* resolver.detectMode({
+          colorOpt: O.some("555555>666666, 777777>888888"),
+          stopOpt: O.none(),
+          formatOpt: O.none(),
+          nameOpt: O.none(),
+          patternOpt: O.none(),
+          exportOpt: O.none(),
+          exportPath: O.none()
+        })
+
+        expect(result.isInteractive).toBe(false)
+        expect(result.mode._tag).toBe("BatchTransform")
+
+        if (result.mode._tag === "BatchTransform") {
+          expect(result.mode.transformations).toHaveLength(2)
+          expect(result.mode.transformations[0].stop).toBeUndefined()
+          expect(result.mode.transformations[1].stop).toBeUndefined()
+        }
+      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+
+    it("should detect batch transformation mode with mixed single and one-to-many", () =>
+      Effect.gen(function*() {
+        const resolver = yield* ModeResolver
+        const result = yield* resolver.detectMode({
+          colorOpt: O.some("BD5200>(2D72D2,#238551,BD5200,#CD4246),555555>666666"),
+          stopOpt: O.none(),
+          formatOpt: O.none(),
+          nameOpt: O.none(),
+          patternOpt: O.none(),
+          exportOpt: O.none(),
+          exportPath: O.none()
+        })
+
+        expect(result.isInteractive).toBe(false)
+        expect(result.mode._tag).toBe("BatchTransform")
+
+        if (result.mode._tag === "BatchTransform") {
+          expect(result.mode.transformations).toHaveLength(2)
+
+          // First should be one-to-many
+          const first = result.mode.transformations[0]
+          if ("targets" in first && first.targets) {
+            expect(first.reference).toContain("BD5200")
+            expect(first.targets).toHaveLength(4)
+            expect(first.stop).toBeUndefined()
+          } else {
+            throw new Error("First transformation should be one-to-many with targets property")
+          }
+
+          // Second should be single
+          const second = result.mode.transformations[1]
+          if ("target" in second && second.target && !("targets" in second)) {
+            expect(second.reference).toContain("555555")
+            expect(second.target).toContain("666666")
+            expect(second.stop).toBeUndefined()
+          } else {
+            throw new Error("Second transformation should be single with target property")
+          }
         }
       }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
 

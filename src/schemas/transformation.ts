@@ -48,20 +48,39 @@ export const TransformationInput = Schema.decodeUnknown(TransformationInputSchem
 export type TransformationInput = typeof TransformationInputSchema.Type
 
 /**
- * One-to-many transformation: reference>(t1,t2,t3)::stop
- *
- * Example: "2D72D2>(238551,DC143C,FF6B6B)::500"
+ * Partial transformation input with optional stop: reference>target[::stop]
  */
-export const TransformationBatchSchema = Schema.Struct({
+export const PartialTransformationInputSchema = TransformationInputSchema.pipe(
+  Schema.partial,
+  Schema.annotations({
+    identifier: "PartialTransformationInput",
+    description: "Transformation input with optional stop position"
+  })
+)
+
+export const PartialTransformationInput = Schema.decodeUnknown(PartialTransformationInputSchema)
+export type PartialTransformationInput = typeof PartialTransformationInputSchema.Type
+
+/**
+ * Base one-to-many transformation structure (without stop requirement)
+ */
+const TransformationBatchBaseSchema = Schema.Struct({
   reference: ColorStringSchema,
   targets: Schema.Array(ColorStringSchema).pipe(
     Schema.minItems(1),
     Schema.annotations({
       description: "List of target colors to apply the reference's appearance to"
     })
-  ),
-  stop: StopPositionSchema
-}).pipe(
+  )
+})
+
+/**
+ * One-to-many transformation: reference>(t1,t2,t3)::stop
+ *
+ * Example: "2D72D2>(238551,DC143C,FF6B6B)::500"
+ */
+export const TransformationBatchSchema = TransformationBatchBaseSchema.pipe(
+  Schema.extend(Schema.Struct({ stop: StopPositionSchema })),
   Schema.annotations({
     identifier: "TransformationBatch",
     description: "One-to-many transformation (reference>(t1,t2,...)::stop)"
@@ -70,6 +89,21 @@ export const TransformationBatchSchema = Schema.Struct({
 
 export const TransformationBatch = Schema.decodeUnknown(TransformationBatchSchema)
 export type TransformationBatch = typeof TransformationBatchSchema.Type
+
+/**
+ * Partial one-to-many transformation with optional stop: reference>(t1,t2,t3)[::stop]
+ * Reference and targets are required, only stop is optional
+ */
+export const PartialTransformationBatchSchema = TransformationBatchBaseSchema.pipe(
+  Schema.extend(Schema.Struct({ stop: Schema.optional(StopPositionSchema) })),
+  Schema.annotations({
+    identifier: "PartialTransformationBatch",
+    description: "One-to-many transformation with optional stop position"
+  })
+)
+
+export const PartialTransformationBatch = Schema.decodeUnknown(PartialTransformationBatchSchema)
+export type PartialTransformationBatch = typeof PartialTransformationBatchSchema.Type
 
 /**
  * Transformation mode selection
