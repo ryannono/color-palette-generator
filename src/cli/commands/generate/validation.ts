@@ -8,10 +8,8 @@
 import * as clack from "@clack/prompts"
 import { Effect, Either, Option as O } from "effect"
 import { ColorSpace, ColorString } from "../../../schemas/color.js"
-import type { ExportTarget as ExportTargetType } from "../../../schemas/export.js"
 import { ExportTarget } from "../../../schemas/export.js"
-import type { StopPosition } from "../../../schemas/palette.js"
-import { StopPosition as StopPositionSchema } from "../../../schemas/palette.js"
+import { StopPosition } from "../../../schemas/palette.js"
 import { promptForColor, promptForExportTarget, promptForOutputFormat, promptForStop } from "../../prompts.js"
 
 /**
@@ -48,18 +46,18 @@ export const validateStop = (stopOpt: O.Option<number>) =>
       const stopResult = yield* Effect.either(
         O.match(stopOpt, {
           onNone: () => promptForStop(),
-          onSome: (value) => StopPositionSchema(value)
+          onSome: (value) => StopPosition(value)
         })
       )
       if (Either.isRight(stopResult)) {
-        return stopResult.right as StopPosition
+        return yield* StopPosition(stopResult.right)
       }
       // On error, always prompt interactively
       clack.log.error("Invalid stop position. Please try again.")
       const retryStop = yield* promptForStop()
-      const retryResult = yield* Effect.either(StopPositionSchema(retryStop))
+      const retryResult = yield* Effect.either(StopPosition(retryStop))
       if (Either.isRight(retryResult)) {
-        return retryResult.right as StopPosition
+        return yield* StopPosition(retryResult.right)
       }
     }
   })
@@ -102,14 +100,14 @@ export const validateExportTarget = (exportOpt: O.Option<string>) =>
         })
       )
       if (Either.isRight(exportResult)) {
-        return exportResult.right as ExportTargetType
+        return yield* ExportTarget(exportResult.right)
       }
       // On error, always prompt interactively
       clack.log.error("Invalid export target. Please try again.")
       const retryExport = yield* promptForExportTarget()
       const retryResult = yield* Effect.either(ExportTarget(retryExport))
       if (Either.isRight(retryResult)) {
-        return retryResult.right as ExportTargetType
+        return yield* ExportTarget(retryResult.right)
       }
     }
   })
