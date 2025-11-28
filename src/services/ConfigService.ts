@@ -6,6 +6,13 @@
  */
 
 import { Config, Effect, Either, Schema } from "effect"
+import {
+  ENV_DEFAULT_BATCH_NAME,
+  ENV_DEFAULT_OUTPUT_FORMAT,
+  ENV_DEFAULT_PALETTE_NAME,
+  ENV_MAX_CONCURRENCY,
+  ENV_PATTERN_SOURCE
+} from "../config/constants.js"
 import { CONFIG_DEFAULTS } from "../config/defaults.js"
 import type { ColorSpace } from "../domain/color/color.schema.js"
 import { ColorSpaceSchema } from "../domain/color/color.schema.js"
@@ -23,6 +30,7 @@ export interface AppConfig {
   readonly patternSource: FilePathType
   readonly defaultOutputFormat: ColorSpace
   readonly defaultPaletteName: string
+  readonly defaultBatchName: string
   readonly maxConcurrency: number
 }
 
@@ -37,7 +45,7 @@ const createSchemaValidator = <A, I>(schema: Schema.Schema<A, I>) => (value: unk
  * Pattern source file path with validation
  */
 const patternSourceConfig: Config.Config<FilePathType> = Config.string(
-  "PATTERN_SOURCE"
+  ENV_PATTERN_SOURCE
 ).pipe(
   Config.withDefault(CONFIG_DEFAULTS.production.patternSource),
   Config.validate({
@@ -50,7 +58,7 @@ const patternSourceConfig: Config.Config<FilePathType> = Config.string(
  * Default output format with color space validation
  */
 const defaultOutputFormatConfig: Config.Config<ColorSpace> = Config.string(
-  "DEFAULT_OUTPUT_FORMAT"
+  ENV_DEFAULT_OUTPUT_FORMAT
 ).pipe(
   Config.withDefault(CONFIG_DEFAULTS.production.defaultOutputFormat),
   Config.validate({
@@ -63,14 +71,21 @@ const defaultOutputFormatConfig: Config.Config<ColorSpace> = Config.string(
  * Default palette name
  */
 const defaultPaletteNameConfig: Config.Config<string> = Config.string(
-  "DEFAULT_PALETTE_NAME"
+  ENV_DEFAULT_PALETTE_NAME
 ).pipe(Config.withDefault(CONFIG_DEFAULTS.production.defaultPaletteName))
+
+/**
+ * Default batch name
+ */
+const defaultBatchNameConfig: Config.Config<string> = Config.string(
+  ENV_DEFAULT_BATCH_NAME
+).pipe(Config.withDefault(CONFIG_DEFAULTS.production.defaultBatchName))
 
 /**
  * Maximum concurrency for parallel operations
  */
 const maxConcurrencyConfig: Config.Config<number> = Config.integer(
-  "MAX_CONCURRENCY"
+  ENV_MAX_CONCURRENCY
 ).pipe(Config.withDefault(CONFIG_DEFAULTS.production.maxConcurrency))
 
 /**
@@ -80,6 +95,7 @@ const appConfigConfig: Config.Config<AppConfig> = Config.all({
   patternSource: patternSourceConfig,
   defaultOutputFormat: defaultOutputFormatConfig,
   defaultPaletteName: defaultPaletteNameConfig,
+  defaultBatchName: defaultBatchNameConfig,
   maxConcurrency: maxConcurrencyConfig
 })
 
@@ -117,8 +133,11 @@ export class ConfigService extends Effect.Service<ConfigService>()(
         CONFIG_DEFAULTS.test.patternSource
       )
       const testConfig: AppConfig = {
-        ...CONFIG_DEFAULTS.test,
-        patternSource
+        patternSource,
+        defaultOutputFormat: CONFIG_DEFAULTS.test.defaultOutputFormat,
+        defaultPaletteName: CONFIG_DEFAULTS.test.defaultPaletteName,
+        defaultBatchName: CONFIG_DEFAULTS.test.defaultBatchName,
+        maxConcurrency: CONFIG_DEFAULTS.test.maxConcurrency
       }
       return {
         getConfig: (): Effect.Effect<AppConfig> => Effect.succeed(testConfig),

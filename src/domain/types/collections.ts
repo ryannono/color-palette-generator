@@ -1,8 +1,8 @@
 /**
  * Type-safe collection utilities for stop-position-based data
  *
- * Provides utilities for building and converting ReadonlyMap instances
- * without unsafe type casting.
+ * Provides utilities for building and accessing ReadonlyMap instances with
+ * StopPosition keys, ensuring type safety without unsafe casting.
  */
 
 import { Data, Effect, Either } from "effect"
@@ -78,20 +78,6 @@ export const getStopTransformEffect = (
     })
   )
 
-/**
- * Safely get number from map, returns Effect
- */
-export const getStopNumberEffect = (
-  map: StopNumberMap,
-  position: StopPosition
-): Effect.Effect<number, CollectionError> =>
-  getStopNumber(map, position).pipe(
-    Either.match({
-      onLeft: Effect.fail,
-      onRight: Effect.succeed
-    })
-  )
-
 // ============================================================================
 // Public API - Map Builders
 // ============================================================================
@@ -102,53 +88,6 @@ export const getStopNumberEffect = (
 export const buildStopNumberMap = (
   fn: (position: StopPosition) => number
 ): StopNumberMap => buildStopMap(fn)
-
-/**
- * Build map of stop positions to transforms
- */
-export const buildStopTransformMap = (
-  fn: (position: StopPosition) => StopTransform
-): StopTransformMap => buildStopMap(fn)
-
-// ============================================================================
-// Public API - Map Operations
-// ============================================================================
-
-/**
- * Transform map values while preserving keys (functor map)
- */
-export const mapStopMap = <A, B>(
-  stopMap: ReadonlyMap<StopPosition, A>,
-  fn: (value: A, position: StopPosition) => B
-): ReadonlyMap<StopPosition, B> =>
-  new Map(
-    Array.from(stopMap.entries()).map(([position, value]) => [position, fn(value, position)])
-  )
-
-// ============================================================================
-// Public API - Serialization
-// ============================================================================
-
-/**
- * Convert ReadonlyMap to Record for JSON serialization
- */
-export const mapToRecord = <K extends PropertyKey, V>(map: ReadonlyMap<K, V>): Record<K, V> => {
-  const entries = Array.from(map.entries())
-  return entries.reduce<Record<K, V>>(
-    (acc, [key, value]) => ({ ...acc, [key]: value }),
-    {} as Record<K, V>
-  )
-}
-
-/**
- * Convert Record to ReadonlyMap
- *
- * Caller must ensure all keys exist with non-undefined values.
- */
-export const recordToMap = <K extends PropertyKey, V>(
-  record: Record<K, V>,
-  keys: ReadonlyArray<K>
-): ReadonlyMap<K, V> => new Map(keys.map((key) => [key, record[key]]))
 
 // ============================================================================
 // Internal Helpers

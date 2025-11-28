@@ -14,13 +14,6 @@ import { Palette, type StopPosition } from "./palette.schema.js"
 import { STOP_POSITIONS } from "./palette.schema.js"
 
 // ============================================================================
-// Constants
-// ============================================================================
-
-/** Default name for generated palettes */
-const DEFAULT_PALETTE_NAME = "generated"
-
-// ============================================================================
 // Errors
 // ============================================================================
 
@@ -50,9 +43,11 @@ export const generatePaletteFromStop = (
   anchorColor: OKLCHColor,
   anchorStop: StopPosition,
   pattern: TransformationPattern,
-  paletteName: string = DEFAULT_PALETTE_NAME
+  paletteName: string
 ): Effect.Effect<Palette, PaletteGenerationError | ColorError | ParseError> =>
   Effect.gen(function*() {
+    const name = paletteName
+
     // Get anchor transform
     const anchorTransform = yield* getStopTransformEffect(
       pattern.transforms,
@@ -110,7 +105,7 @@ export const generatePaletteFromStop = (
     const sortedStops = [...stops].sort((a, b) => a.position - b.position)
 
     return yield* Palette({
-      name: paletteName,
+      name,
       stops: sortedStops
     })
   })

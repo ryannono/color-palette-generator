@@ -7,7 +7,6 @@
 
 import { NodeContext } from "@effect/platform-node"
 import { Layer } from "effect"
-import { ModeResolver } from "../cli/commands/generate/modes/resolver.js"
 import { ConfigService } from "../services/ConfigService.js"
 import { ExportService } from "../services/ExportService/index.js"
 import { PaletteService } from "../services/PaletteService/index.js"
@@ -21,13 +20,11 @@ import { PatternService } from "../services/PatternService/index.js"
  * 2. PatternService - needs NodeContext (FileSystem, Path)
  * 3. ExportService - needs NodeContext (FileSystem, Path)
  * 4. PaletteService - needs PatternService, ConfigService
- * 5. ModeResolver - no dependencies
  */
 export const MainLive = Layer.mergeAll(
   ConfigService.Default,
   PatternService.Default,
   ExportService.Default,
   PaletteService.Default,
-  ModeResolver.Default,
   NodeContext.layer
 )

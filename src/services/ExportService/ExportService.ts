@@ -9,8 +9,7 @@ import { FileSystem, Path } from "@effect/platform"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import clipboardy from "clipboardy"
 import { Data, Effect, Match } from "effect"
-import type { BatchGeneratedPaletteOutput } from "../PaletteService/batch.schema.js"
-import type { GeneratedPaletteOutput } from "../PaletteService/generation.schema.js"
+import type { BatchResult, PaletteResult } from "../PaletteService/palette.schema.js"
 import type { ExportConfig } from "./export.schema.js"
 import { JSONPath } from "./export.schema.js"
 
@@ -49,13 +48,13 @@ export class ExportService extends Effect.Service<ExportService>()("ExportServic
       /**
        * Export single palette
        */
-      exportPalette: (palette: GeneratedPaletteOutput, config: ExportConfig): Effect.Effect<void, ExportError> =>
+      exportPalette: (palette: PaletteResult, config: ExportConfig): Effect.Effect<void, ExportError> =>
         exportData(palette, config, fs, path),
 
       /**
        * Export batch of palettes
        */
-      exportBatch: (batch: BatchGeneratedPaletteOutput, config: ExportConfig): Effect.Effect<void, ExportError> =>
+      exportBatch: (batch: BatchResult, config: ExportConfig): Effect.Effect<void, ExportError> =>
         exportData(batch, config, fs, path)
     }
   }),
@@ -75,7 +74,7 @@ const serializeForExport = <T>(data: T): string => JSON.stringify(data, null, JS
  * Export data based on config target (exhaustive pattern match)
  */
 const exportData = (
-  data: GeneratedPaletteOutput | BatchGeneratedPaletteOutput,
+  data: PaletteResult | BatchResult,
   config: ExportConfig,
   fs: FileSystem.FileSystem,
   path: Path.Path

@@ -5,7 +5,7 @@
  * with support for single and batch generation.
  */
 
-import { Array, Data, Effect, Either, Layer } from "effect"
+import { Array, Data, Effect, Either, Layer, Schema } from "effect"
 import type { ParseError } from "effect/ParseResult"
 import { ColorError, oklchToHex, oklchToOKLAB, oklchToRGB, parseColorStringToOKLCH } from "../../domain/color/color.js"
 import type { ColorSpace, OKLABColor, OKLCHColor, RGBColor } from "../../domain/color/color.schema.js"
@@ -13,8 +13,13 @@ import { generatePaletteFromStop } from "../../domain/palette/generator.js"
 import { ConfigService } from "../ConfigService.js"
 import { FilePath } from "../PatternService/filesystem.schema.js"
 import { PatternService } from "../PatternService/index.js"
-import type { BatchGeneratedPaletteOutput, BatchGeneratePaletteInput } from "./batch.schema.js"
-import { GeneratedPaletteOutput, type GeneratePaletteInput } from "./generation.schema.js"
+import {
+  type BatchRequest,
+  type BatchResult,
+  ISOTimestampSchema,
+  type PaletteRequest,
+  PaletteResult
+} from "./palette.schema.js"
 
 // ============================================================================
 // Errors
@@ -60,8 +65,8 @@ export class PaletteService extends Effect.Service<PaletteService>()(
        * 5. Validate and return formatted result
        */
       const generate = (
-        input: GeneratePaletteInput
-      ): Effect.Effect<GeneratedPaletteOutput, PaletteGenerationError> =>
+        input: PaletteRequest
+      ): Effect.Effect<PaletteResult, PaletteGenerationError> =>
         Effect.gen(function*() {
           const { anchorStop, inputColor, outputFormat, paletteName } = input
 
@@ -100,7 +105,7 @@ export class PaletteService extends Effect.Service<PaletteService>()(
             { concurrency: "unbounded" }
           )
 
-          return yield* GeneratedPaletteOutput({
+          return yield* PaletteResult({
             anchorStop,
             inputColor,
             name: palette.name,
@@ -124,8 +129,8 @@ export class PaletteService extends Effect.Service<PaletteService>()(
        * successful palettes are returned with a partial flag indicating if any failed.
        */
       const generateBatch = (
-        input: BatchGeneratePaletteInput
-      ): Effect.Effect<BatchGeneratedPaletteOutput, never> =>
+        input: BatchRequest
+      ): Effect.Effect<BatchResult, never> =>
         Effect.gen(function*() {
           const results = yield* Effect.forEach(
             input.pairs,
@@ -146,7 +151,7 @@ export class PaletteService extends Effect.Service<PaletteService>()(
 
           const generatedAt = yield* Effect.clockWith((clock) =>
             clock.currentTimeMillis.pipe(
-              Effect.map((millis) => new Date(millis).toISOString())
+              Effect.map((millis) => Schema.decodeSync(ISOTimestampSchema)(new Date(millis).toISOString()))
             )
           )
 

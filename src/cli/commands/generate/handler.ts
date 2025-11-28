@@ -15,10 +15,11 @@ import {
   promptForStop,
   promptForTargetColors
 } from "../../prompts.js"
-import type { TransformationBatch, TransformationInput } from "../../schemas/transformation.schema.js"
+import type { TransformationInput } from "../../schemas/transformation.schema.js"
 import { handleBatchMode } from "./modes/batch/executor.js"
 import { ModeResolver } from "./modes/resolver.js"
 import { handleSingleMode } from "./modes/single/executor.js"
+import { completePartialTransformations } from "./modes/transform/completer.js"
 import {
   handleBatchTransformations,
   handleOneToManyTransformation,
@@ -57,7 +58,7 @@ export const handleGenerate = ({
     })
 
     // Use ModeResolver to detect execution mode
-    const resolver = yield* ModeResolver
+    const resolver = yield* Effect.provide(ModeResolver, ModeResolver.Default)
     const detection = yield* resolver.detectMode({
       colorOpt,
       stopOpt,
@@ -135,7 +136,6 @@ export const handleGenerate = ({
           exportPath,
           formatOpt,
           inputs: allTransformations,
-          isInteractive,
           nameOpt,
           pattern
         })
@@ -204,7 +204,6 @@ export const handleGenerate = ({
           exportPath,
           formatOpt,
           input,
-          isInteractive: isInteractive || mode.input.stop === undefined,
           nameOpt,
           pattern
         })
@@ -224,7 +223,6 @@ export const handleGenerate = ({
             targets: mode.targets,
             stop
           },
-          isInteractive: isInteractive || !mode.stop,
           nameOpt,
           pattern
         })
@@ -232,80 +230,16 @@ export const handleGenerate = ({
       }
 
       case "BatchTransform": {
-        // Complete any partial transformations by prompting for missing stops
-        const completedInputs: Array<TransformationInput | TransformationBatch> = []
-        let hadPartial = false
-        let transformationIndex = 0
-
-        for (const transformation of mode.transformations) {
-          transformationIndex++
-
-          if ("targets" in transformation && transformation.targets) {
-            // One-to-many transformation
-            if (
-              transformation.reference &&
-              transformation.targets.length > 0 &&
-              transformation.stop !== undefined
-            ) {
-              // Already complete
-              completedInputs.push({
-                reference: transformation.reference,
-                targets: transformation.targets,
-                stop: transformation.stop
-              })
-            } else if (
-              transformation.reference &&
-              transformation.targets.length > 0
-            ) {
-              // Missing stop - prompt for it with context
-              hadPartial = true
-              const transformationDesc = `${transformation.reference}>(${transformation.targets.join(", ")})`
-              const stop = yield* promptForStop(
-                transformationDesc,
-                transformationIndex
-              )
-              completedInputs.push({
-                reference: transformation.reference,
-                targets: transformation.targets,
-                stop
-              })
-            }
-          } else if ("target" in transformation && transformation.target) {
-            // Single transformation
-            if (
-              transformation.reference &&
-              transformation.target &&
-              transformation.stop !== undefined
-            ) {
-              // Already complete
-              completedInputs.push({
-                reference: transformation.reference,
-                target: transformation.target,
-                stop: transformation.stop
-              })
-            } else if (transformation.reference && transformation.target) {
-              // Missing stop - prompt for it with context
-              hadPartial = true
-              const transformationDesc = `${transformation.reference}>${transformation.target}`
-              const stop = yield* promptForStop(
-                transformationDesc,
-                transformationIndex
-              )
-              completedInputs.push({
-                reference: transformation.reference,
-                target: transformation.target,
-                stop
-              })
-            }
-          }
-        }
+        // Complete partial transformations by prompting for missing stops
+        const { inputs: completedInputs } = yield* completePartialTransformations(
+          mode.transformations
+        )
 
         result = yield* handleBatchTransformations({
           exportOpt,
           exportPath,
           formatOpt,
           inputs: completedInputs,
-          isInteractive: isInteractive || hadPartial,
           nameOpt,
           pattern
         })

@@ -5,11 +5,14 @@
 import { FileSystem, Path } from "@effect/platform"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Either, Layer, ParseResult } from "effect"
+import { Effect, Either, Layer, ParseResult, Schema } from "effect"
 import { vi } from "vitest"
 import { ExportError, ExportService, JSONPath } from "../../../src/services/ExportService/index.js"
-import type { BatchGeneratedPaletteOutput } from "../../../src/services/PaletteService/batch.schema.js"
-import type { GeneratedPaletteOutput } from "../../../src/services/PaletteService/generation.schema.js"
+import {
+  type BatchResult,
+  ISOTimestampSchema,
+  type PaletteResult
+} from "../../../src/services/PaletteService/palette.schema.js"
 
 import clipboardy from "clipboardy"
 
@@ -29,7 +32,7 @@ const TestLayer = Layer.mergeAll(
 
 describe("ExportService", () => {
   // Sample palette for testing
-  const samplePalette: GeneratedPaletteOutput = {
+  const samplePalette: PaletteResult = {
     name: "test-palette",
     outputFormat: "hex",
     inputColor: "#2D72D2",
@@ -54,12 +57,12 @@ describe("ExportService", () => {
   }
 
   // Sample batch for testing
-  const sampleBatch: BatchGeneratedPaletteOutput = {
+  const sampleBatch: BatchResult = {
     groupName: "test-batch",
     outputFormat: "hex",
     palettes: [samplePalette],
     partial: false,
-    generatedAt: new Date().toISOString()
+    generatedAt: Schema.decodeSync(ISOTimestampSchema)(new Date().toISOString())
   }
 
   describe("exportPalette", () => {
