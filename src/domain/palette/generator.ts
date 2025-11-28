@@ -27,7 +27,9 @@ const DEFAULT_PALETTE_NAME = "generated"
 /**
  * Error when palette generation fails
  */
-export class PaletteGenerationError extends Data.TaggedError("PaletteGenerationError")<{
+export class PaletteGenerationError extends Data.TaggedError(
+  "PaletteGenerationError"
+)<{
   readonly message: string
   readonly cause?: unknown
 }> {}
@@ -52,7 +54,10 @@ export const generatePaletteFromStop = (
 ): Effect.Effect<Palette, PaletteGenerationError | ColorError | ParseError> =>
   Effect.gen(function*() {
     // Get anchor transform
-    const anchorTransform = yield* getStopTransformEffect(pattern.transforms, anchorStop).pipe(
+    const anchorTransform = yield* getStopTransformEffect(
+      pattern.transforms,
+      anchorStop
+    ).pipe(
       Effect.mapError(
         (cause) =>
           new PaletteGenerationError({
@@ -67,7 +72,10 @@ export const generatePaletteFromStop = (
       STOP_POSITIONS,
       (targetStop) =>
         Effect.gen(function*() {
-          const targetTransform = yield* getStopTransformEffect(pattern.transforms, targetStop).pipe(
+          const targetTransform = yield* getStopTransformEffect(
+            pattern.transforms,
+            targetStop
+          ).pipe(
             Effect.mapError(
               (cause) =>
                 new PaletteGenerationError({
@@ -78,8 +86,14 @@ export const generatePaletteFromStop = (
           )
 
           // Calculate and apply transforms
-          const relative = computeRelativeTransform(targetTransform, anchorTransform)
-          const transformedColor = applyRelativeTransform(anchorColor, relative)
+          const relative = computeRelativeTransform(
+            targetTransform,
+            anchorTransform
+          )
+          const transformedColor = applyRelativeTransform(
+            anchorColor,
+            relative
+          )
 
           // Ensure displayable
           const finalColor = yield* ensureDisplayable(transformedColor)
@@ -105,9 +119,7 @@ export const generatePaletteFromStop = (
 // Transform Helpers
 // ============================================================================
 
-/**
- * Relative transform ratios
- */
+/** Relative transform ratios */
 interface RelativeTransform {
   readonly lightnessRatio: number
   readonly chromaRatio: number
@@ -129,7 +141,10 @@ const computeRelativeTransform = (
 /**
  * Apply relative transform to color
  */
-const applyRelativeTransform = (color: OKLCHColor, transform: RelativeTransform): OKLCHColor => ({
+const applyRelativeTransform = (
+  color: OKLCHColor,
+  transform: RelativeTransform
+): OKLCHColor => ({
   l: clamp(color.l * transform.lightnessRatio, 0, 1),
   c: Math.max(0, color.c * transform.chromaRatio),
   h: normalizeHue(color.h + transform.hueDelta),
@@ -143,5 +158,5 @@ const ensureDisplayable = (
   color: OKLCHColor
 ): Effect.Effect<OKLCHColor, ColorError> =>
   isDisplayable(color).pipe(
-    Effect.flatMap((displayable) => (displayable ? Effect.succeed(color) : clampToGamut(color)))
+    Effect.flatMap((displayable) => displayable ? Effect.succeed(color) : clampToGamut(color))
   )

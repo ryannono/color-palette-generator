@@ -8,9 +8,11 @@ import { STOP_POSITIONS } from "../palette/palette.schema.js"
 import type { StopTransform, TransformationPattern } from "../pattern/pattern.js"
 import { buildStopNumberMap, getStopNumber, getStopTransform, type StopTransformMap } from "../types/collections.js"
 
-/**
- * Error when interpolation or smoothing operations fail
- */
+// ============================================================================
+// Errors
+// ============================================================================
+
+/** Error when interpolation or smoothing operations fail */
 export class InterpolationError extends Data.TaggedError("InterpolationError")<{
   readonly message: string
   readonly cause?: unknown
@@ -46,47 +48,41 @@ const STOP_RANGE = DARKEST_STOP - LIGHTEST_STOP // 900
 export const smoothPattern = (
   pattern: TransformationPattern
 ): Either.Either<TransformationPattern, InterpolationError> =>
-  Either.all([
-    calculateLinearLightness(pattern),
-    smoothChromaCurve(pattern),
-    calculateConsistentHue(pattern)
-  ]).pipe(
-    Either.mapLeft((cause) => new InterpolationError({ message: "Failed to smooth pattern", cause })),
-    Either.flatMap(([lightnessMultipliers, chromaMultipliers, consistentHue]) =>
-      buildTransformMapFromEithers(
-        lightnessMultipliers,
-        chromaMultipliers,
-        consistentHue
-      ).pipe(
-        Either.mapLeft((cause) => new InterpolationError({ message: "Failed to build transform map", cause })),
-        Either.map((transforms) => ({
-          ...pattern,
-          name: `${pattern.name}-smoothed`,
-          transforms
-        }))
-      )
+  Either.gen(function*() {
+    const [lightnessMultipliers, chromaMultipliers, consistentHue] = yield* Either.all([
+      calculateLinearLightness(pattern),
+      smoothChromaCurve(pattern),
+      calculateConsistentHue(pattern)
+    ]).pipe(
+      Either.mapLeft((cause) => new InterpolationError({ message: "Failed to smooth pattern", cause }))
     )
-  )
 
-/**
- * Linear interpolation between two values
- */
+    const transforms = yield* buildTransformMapFromEithers(
+      lightnessMultipliers,
+      chromaMultipliers,
+      consistentHue
+    ).pipe(
+      Either.mapLeft((cause) => new InterpolationError({ message: "Failed to build transform map", cause }))
+    )
+
+    return {
+      ...pattern,
+      name: `${pattern.name}-smoothed`,
+      transforms
+    }
+  })
+
+/** Linear interpolation between two values */
 export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 
-/**
- * Clamp a value between min and max
- */
+/** Clamp a value between min and max */
 export const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
 
 // ============================================================================
 // Pattern Smoothing Helpers
 // ============================================================================
 
-/**
- * Build a StopTransformMap by combining lightness, chroma, and hue values.
- *
- * Collects all Either results for each position and builds the map if all succeed.
- */
+/** Build a StopTransformMap by combining lightness, chroma, and hue values */
 const buildTransformMapFromEithers = (
   lightnessMultipliers: ReadonlyMap<StopPosition, number>,
   chromaMultipliers: ReadonlyMap<StopPosition, number>,
@@ -115,9 +111,7 @@ const buildTransformMapFromEithers = (
     Either.map((entries) => new Map(entries.map(({ position, transform }) => [position, transform])))
   )
 
-/**
- * Calculate lightness multipliers using quadratic interpolation
- */
+/** Calculate lightness multipliers using quadratic interpolation */
 const calculateLinearLightness = (
   pattern: TransformationPattern
 ): Either.Either<ReadonlyMap<StopPosition, number>, InterpolationError> =>
@@ -125,9 +119,7 @@ const calculateLinearLightness = (
     Either.mapLeft((cause) => new InterpolationError({ message: "Failed to calculate lightness multipliers", cause }))
   )
 
-/**
- * Smooth chroma curve using quadratic interpolation
- */
+/** Smooth chroma curve using quadratic interpolation */
 const smoothChromaCurve = (
   pattern: TransformationPattern
 ): Either.Either<ReadonlyMap<StopPosition, number>, InterpolationError> =>
@@ -135,9 +127,7 @@ const smoothChromaCurve = (
     Either.mapLeft((cause) => new InterpolationError({ message: "Failed to smooth chroma curve", cause }))
   )
 
-/**
- * Calculate consistent hue shift (median of all values)
- */
+/** Calculate consistent hue shift using median of all values */
 const calculateConsistentHue = (
   pattern: TransformationPattern
 ): Either.Either<number, InterpolationError> =>
@@ -161,23 +151,10 @@ const calculateConsistentHue = (
 // Interpolation Utilities
 // ============================================================================
 
-/**
- * Property extractor type for StopTransform
- */
+/** Property extractor type for StopTransform */
 type TransformPropertyExtractor = (transform: StopTransform) => number
 
-/**
- * Create a quadratic interpolation curve through three key points.
- *
- * Fits a parabola y = ax^2 + bx + c through:
- * - (LIGHTEST_STOP, value100)
- * - (REFERENCE_STOP, REFERENCE_MULTIPLIER) - reference point
- * - (DARKEST_STOP, value1000)
- *
- * Returns Either.left if any values are missing, Either.right with the interpolated map otherwise.
- *
- * @param extractProperty - Function to extract the relevant property from a transform
- */
+/** Create a quadratic interpolation curve through three key points (100, 500, 1000) */
 const createQuadraticInterpolation = (
   pattern: TransformationPattern,
   extractProperty: TransformPropertyExtractor
@@ -206,18 +183,14 @@ const createQuadraticInterpolation = (
     })
   )
 
-/**
- * Normalize a stop position to [0, 1] range
- */
+/** Normalize a stop position to [0, 1] range */
 const normalizePosition = (position: StopPosition): number => (position - LIGHTEST_STOP) / STOP_RANGE
 
 // ============================================================================
 // Math Utilities
 // ============================================================================
 
-/**
- * Calculate median of a non-empty array of numbers using functional composition.
- */
+/** Calculate median of a non-empty array of numbers using functional composition */
 const median = (values: ReadonlyArray<number>): Either.Either<number, InterpolationError> =>
   Arr.match(values, {
     onEmpty: () => Either.left(new InterpolationError({ message: "Failed to calculate median: array is empty" })),
@@ -229,9 +202,7 @@ const median = (values: ReadonlyArray<number>): Either.Either<number, Interpolat
     }
   })
 
-/**
- * Compute median for even-length arrays (average of two middle elements)
- */
+/** Compute median for even-length arrays using average of two middle elements */
 const computeEvenMedian = (
   sorted: ReadonlyArray<number>,
   mid: number
@@ -245,9 +216,7 @@ const computeEvenMedian = (
     (a + b) / 2
   ))
 
-/**
- * Compute median for odd-length arrays (middle element)
- */
+/** Compute median for odd-length arrays using middle element */
 const computeOddMedian = (
   sorted: ReadonlyArray<number>,
   mid: number
