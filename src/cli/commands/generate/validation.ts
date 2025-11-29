@@ -11,7 +11,13 @@ import type { ParseError } from "effect/ParseResult"
 import { ColorSpace, type ColorSpace as ColorSpaceType, ColorString } from "../../../domain/color/color.schema.js"
 import { StopPosition, type StopPosition as StopPositionType } from "../../../domain/palette/palette.schema.js"
 import { ExportTarget, type ExportTarget as ExportTargetType } from "../../../services/ExportService/export.schema.js"
-import { promptForColor, promptForExportTarget, promptForOutputFormat, promptForStop } from "../../prompts.js"
+import {
+  CancelledError,
+  promptForColor,
+  promptForExportTarget,
+  promptForOutputFormat,
+  promptForStop
+} from "../../prompts.js"
 
 // ============================================================================
 // Generic Validator
@@ -25,31 +31,38 @@ import { promptForColor, promptForExportTarget, promptForOutputFormat, promptFor
  */
 type ValidatorConfig<TRawInput, TPromptOutput, TOutput> = {
   readonly validate: (value: TRawInput) => Effect.Effect<TOutput, ParseError>
-  readonly prompt: () => Effect.Effect<TPromptOutput, ParseError>
+  readonly prompt: () => Effect.Effect<TPromptOutput, ParseError | CancelledError>
   readonly errorMessage: string
 }
 
 /**
  * Create a validator that retries on failure using recursive Effect composition.
  * Replaces imperative while(true) loops with FP-style recursion.
+ *
+ * CancelledError is not caught and propagates up - this is intentional as
+ * cancellation should exit the entire flow, not trigger a retry.
  */
 const createValidator = <TRawInput, TPromptOutput extends TRawInput, TOutput>(
   config: ValidatorConfig<TRawInput, TPromptOutput, TOutput>
 ) => {
-  const logErrorAndRetry: Effect.Effect<TOutput, never> = pipe(
+  const logErrorAndRetry: Effect.Effect<TOutput, CancelledError> = pipe(
     Effect.sync(() => clack.log.error(config.errorMessage)),
     Effect.flatMap(() => config.prompt()),
     Effect.flatMap(config.validate),
-    Effect.catchAll(() => logErrorAndRetry)
+    Effect.catchTag("ParseError", () => logErrorAndRetry)
   )
 
-  return (opt: O.Option<TRawInput>): Effect.Effect<TOutput, never> =>
+  return (opt: O.Option<TRawInput>): Effect.Effect<TOutput, CancelledError> =>
     pipe(
       O.match(opt, {
         onNone: () => pipe(config.prompt(), Effect.flatMap(config.validate)),
-        onSome: config.validate
+        onSome: (value) =>
+          pipe(
+            config.validate(value),
+            Effect.mapError((e): ParseError | CancelledError => e)
+          )
       }),
-      Effect.catchAll(() => logErrorAndRetry)
+      Effect.catchTag("ParseError", () => logErrorAndRetry)
     )
 }
 
@@ -60,7 +73,7 @@ const createValidator = <TRawInput, TPromptOutput extends TRawInput, TOutput>(
 /**
  * Validate color input with retry on error (for single mode)
  */
-export const validateColor = (colorOpt: O.Option<string>): Effect.Effect<string, never> =>
+export const validateColor = (colorOpt: O.Option<string>): Effect.Effect<string, CancelledError> =>
   createValidator<string, string, string>({
     validate: ColorString,
     prompt: promptForColor,
@@ -70,7 +83,7 @@ export const validateColor = (colorOpt: O.Option<string>): Effect.Effect<string,
 /**
  * Validate stop position with retry on error
  */
-export const validateStop = (stopOpt: O.Option<number>): Effect.Effect<StopPositionType, never> =>
+export const validateStop = (stopOpt: O.Option<number>): Effect.Effect<StopPositionType, CancelledError> =>
   createValidator<number, StopPositionType, StopPositionType>({
     validate: StopPosition,
     prompt: promptForStop,
@@ -80,7 +93,7 @@ export const validateStop = (stopOpt: O.Option<number>): Effect.Effect<StopPosit
 /**
  * Validate output format with retry on error
  */
-export const validateFormat = (formatOpt: O.Option<string>): Effect.Effect<ColorSpaceType, never> =>
+export const validateFormat = (formatOpt: O.Option<string>): Effect.Effect<ColorSpaceType, CancelledError> =>
   createValidator<string, ColorSpaceType, ColorSpaceType>({
     validate: ColorSpace,
     prompt: promptForOutputFormat,
@@ -90,7 +103,7 @@ export const validateFormat = (formatOpt: O.Option<string>): Effect.Effect<Color
 /**
  * Validate export target with retry on error
  */
-export const validateExportTarget = (exportOpt: O.Option<string>): Effect.Effect<ExportTargetType, never> =>
+export const validateExportTarget = (exportOpt: O.Option<string>): Effect.Effect<ExportTargetType, CancelledError> =>
   createValidator<string, ExportTargetType, ExportTargetType>({
     validate: ExportTarget,
     prompt: promptForExportTarget,

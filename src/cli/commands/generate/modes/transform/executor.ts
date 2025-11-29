@@ -4,14 +4,14 @@
  * Applies optical appearance transformations and generates palettes.
  */
 
-import { Array as Arr, Effect, Option as O, pipe, Schema } from "effect"
+import { Array as Arr, Effect, Option as O, pipe } from "effect"
 import { applyOpticalAppearance, oklchToHex, parseColorStringToOKLCH } from "../../../../../domain/color/color.js"
 import {
   type ColorSpace as ColorSpaceType,
   ColorSpace as decodeColorSpace
 } from "../../../../../domain/color/color.schema.js"
 import { ConfigService } from "../../../../../services/ConfigService.js"
-import { BatchResult, ISOTimestampSchema } from "../../../../../services/PaletteService/palette.schema.js"
+import { BatchResult, ISOTimestamp } from "../../../../../services/PaletteService/palette.schema.js"
 import {
   buildExportConfig,
   displayPalette,
@@ -291,7 +291,7 @@ const handleBatchExport = (
         Effect.gen(function*() {
           const generatedAt = yield* Effect.clockWith((clock) =>
             clock.currentTimeMillis.pipe(
-              Effect.map((millis) => Schema.decodeSync(ISOTimestampSchema)(new Date(millis).toISOString()))
+              Effect.flatMap((millis) => ISOTimestamp(new Date(millis).toISOString()))
             )
           )
 

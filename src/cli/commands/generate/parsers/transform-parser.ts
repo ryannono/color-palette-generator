@@ -221,29 +221,40 @@ const tryParseSeparator = (
     O.filter((s) => s.length > 0)
   )
 
-/** Extract and trim the first part before a separator */
-const extractFirstPart = (input: string, separator: string): string =>
+/** Extract and trim the first part before a separator, returns Option */
+const extractFirstPart = (input: string, separator: string): O.Option<string> =>
   pipe(
     O.fromNullable(input.split(separator)[0]),
     O.map((s) => s.trim()),
-    O.getOrElse(() => "")
+    O.filter((s) => s.length > 0)
   )
 
 /** Parse target and stop from target part string */
 const parseTargetAndStop = (targetPart: string): ParsedTargetAndStop => {
   const doubleColon = tryParseSeparator(targetPart, "::")
   if (O.isSome(doubleColon)) {
-    return { stopStr: doubleColon, target: extractFirstPart(targetPart, "::") }
+    return {
+      stopStr: doubleColon,
+      target: O.getOrElse(extractFirstPart(targetPart, "::"), () => targetPart.trim())
+    }
   }
 
   const singleColon = tryParseSeparator(targetPart, ":")
   if (O.isSome(singleColon)) {
-    return { stopStr: singleColon, target: extractFirstPart(targetPart, ":") }
+    return {
+      stopStr: singleColon,
+      target: O.getOrElse(extractFirstPart(targetPart, ":"), () => targetPart.trim())
+    }
   }
 
   const parts = targetPart.trim().split(/\s+/)
   if (parts.length >= 2) {
-    const target = pipe(O.fromNullable(parts[0]), O.map((s) => s.trim()), O.getOrElse(() => ""))
+    const target = pipe(
+      O.fromNullable(parts[0]),
+      O.map((s) => s.trim()),
+      O.filter((s) => s.length > 0),
+      O.getOrElse(() => targetPart.trim())
+    )
     const stopStr = O.fromNullable(parts[1]?.trim()).pipe(O.filter((s) => s.length > 0))
     return { stopStr, target }
   }

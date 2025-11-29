@@ -14,7 +14,7 @@ import { JSONPath } from "../../../../services/ExportService/export.schema.js"
 import { ExportService } from "../../../../services/ExportService/index.js"
 import { PaletteService } from "../../../../services/PaletteService/index.js"
 import { BatchResult, PaletteRequest, type PaletteResult } from "../../../../services/PaletteService/palette.schema.js"
-import { promptForJsonPath } from "../../../prompts.js"
+import { CancelledError, promptForJsonPath } from "../../../prompts.js"
 import { validateExportTarget } from "../validation.js"
 
 // ============================================================================
@@ -188,7 +188,7 @@ const getExportSuccessMessage = (config: ExportConfig): string =>
 const resolveJsonPath = (
   exportTarget: ExportConfig["target"],
   exportPath: O.Option<string>
-): Effect.Effect<JSONPathType | undefined, ParseResult.ParseError> =>
+): Effect.Effect<JSONPathType | undefined, ParseResult.ParseError | CancelledError> =>
   exportTarget === "json"
     ? pipe(
       exportPath,

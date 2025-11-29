@@ -5,7 +5,7 @@
  */
 
 import * as clack from "@clack/prompts"
-import { Effect } from "effect"
+import { Data, Effect } from "effect"
 import type { ParseError } from "effect/ParseResult"
 import { ColorSpace, ColorString } from "../domain/color/color.schema.js"
 import {
@@ -24,13 +24,27 @@ import {
 } from "../services/ExportService/export.schema.js"
 
 // ============================================================================
+// Errors
+// ============================================================================
+
+/**
+ * Error thrown when user cancels an operation (e.g., Ctrl+C in prompts)
+ *
+ * This error should be caught at the CLI entry point and result in a
+ * graceful exit with code 0 (not an error condition).
+ */
+export class CancelledError extends Data.TaggedError("CancelledError")<{
+  readonly message: string
+}> {}
+
+// ============================================================================
 // Public API
 // ============================================================================
 
 /**
  * Prompt for color input
  */
-export const promptForColor = (): Effect.Effect<string, ParseError, never> =>
+export const promptForColor = (): Effect.Effect<string, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const color = yield* Effect.promise(() =>
       clack.text({
@@ -49,7 +63,10 @@ export const promptForColor = (): Effect.Effect<string, ParseError, never> =>
 /**
  * Prompt for stop position
  */
-export const promptForStop = (color?: ColorString, colorIndex?: number): Effect.Effect<StopPositionType, ParseError> =>
+export const promptForStop = (
+  color?: ColorString,
+  colorIndex?: number
+): Effect.Effect<StopPositionType, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const message = buildStopMessage(color, colorIndex)
 
@@ -69,7 +86,7 @@ export const promptForStop = (color?: ColorString, colorIndex?: number): Effect.
 /**
  * Prompt for output format
  */
-export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError> =>
+export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const format = yield* Effect.promise(() =>
       clack.select({
@@ -91,7 +108,7 @@ export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError> =
  */
 export const promptForPaletteName = (
   defaultName: string
-): Effect.Effect<string, ParseError> =>
+): Effect.Effect<string, CancelledError> =>
   Effect.gen(function*() {
     const name = yield* Effect.promise(() =>
       clack.text({
@@ -107,7 +124,7 @@ export const promptForPaletteName = (
 /**
  * Prompt for batch input mode
  */
-export const promptForBatchInputMode = (): Effect.Effect<BatchInputModeType, ParseError> =>
+export const promptForBatchInputMode = (): Effect.Effect<BatchInputModeType, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const mode = yield* Effect.promise(() =>
       clack.select({
@@ -138,7 +155,7 @@ export const promptForBatchInputMode = (): Effect.Effect<BatchInputModeType, Par
 /**
  * Prompt for paste mode batch input
  */
-export const promptForBatchPaste = (): Effect.Effect<string, ParseError> =>
+export const promptForBatchPaste = (): Effect.Effect<string, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const input = yield* Effect.promise(() =>
       clack.text({
@@ -159,7 +176,7 @@ export const promptForBatchPaste = (): Effect.Effect<string, ParseError> =>
 /**
  * Prompt for export target
  */
-export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseError> =>
+export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const target = yield* Effect.promise(() =>
       clack.select({
@@ -178,7 +195,7 @@ export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseEr
 /**
  * Prompt for JSON file path
  */
-export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError> =>
+export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const path = yield* Effect.promise(() =>
       clack.text({
@@ -199,7 +216,7 @@ export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError> =>
 /**
  * Prompt for transformation reference color
  */
-export const promptForReferenceColor = (): Effect.Effect<string, ParseError> =>
+export const promptForReferenceColor = (): Effect.Effect<string, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const color = yield* Effect.promise(() =>
       clack.text({
@@ -218,7 +235,7 @@ export const promptForReferenceColor = (): Effect.Effect<string, ParseError> =>
 /**
  * Prompt for transformation target color(s)
  */
-export const promptForTargetColors = (): Effect.Effect<Array<string>, ParseError> =>
+export const promptForTargetColors = (): Effect.Effect<Array<string>, ParseError | CancelledError> =>
   Effect.gen(function*() {
     const input = yield* Effect.promise(() =>
       clack.text({
@@ -260,14 +277,14 @@ export const promptForAnotherTransformation = (): Effect.Effect<boolean, never> 
 // ============================================================================
 
 /**
- * Handle cancellation by exiting the process
+ * Handle cancellation by returning a CancelledError
+ *
+ * This keeps cancellation in the Effect error channel, allowing it to be
+ * handled at the CLI entry point rather than abruptly terminating the process.
  */
-const handleCancel = <T>(value: T | symbol): Effect.Effect<T, never> => {
+const handleCancel = <T>(value: T | symbol): Effect.Effect<T, CancelledError> => {
   if (clack.isCancel(value)) {
-    return Effect.sync(() => {
-      clack.cancel("Operation cancelled")
-      process.exit(0)
-    })
+    return Effect.fail(new CancelledError({ message: "Operation cancelled" }))
   }
   return Effect.succeed(value)
 }
