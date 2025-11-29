@@ -5,6 +5,7 @@
 import { Array as Arr, Data, Effect, Option, pipe } from "effect"
 import type { ParseError } from "effect/ParseResult"
 import type { StopPosition } from "../../../../../domain/palette/palette.schema.js"
+import { PromptService } from "../../../../../services/PromptService/index.js"
 import { CancelledError, promptForStop } from "../../../../prompts.js"
 import type {
   PartialTransformationBatch,
@@ -56,7 +57,8 @@ export const completePartialTransformations = (
     readonly inputs: ReadonlyArray<OutputType>
     readonly hadPartial: boolean
   },
-  ParseError | CancelledError
+  ParseError | CancelledError,
+  PromptService
 > =>
   pipe(
     transformations,
@@ -71,7 +73,7 @@ export const completePartialTransformations = (
 const processTransformation = (
   transformation: InputType,
   index: number
-): Effect.Effect<ProcessResult, ParseError | CancelledError> =>
+): Effect.Effect<ProcessResult, ParseError | CancelledError, PromptService> =>
   pipe(
     classifyTransformation(transformation),
     (classified) =>
@@ -150,7 +152,7 @@ const partialResult = (
   description: string,
   index: number,
   builder: (stop: StopPosition) => OutputType
-): Effect.Effect<ProcessResult, ParseError | CancelledError> =>
+): Effect.Effect<ProcessResult, ParseError | CancelledError, PromptService> =>
   pipe(
     promptForStop(description, index),
     Effect.map((stop) => ({ completed: Option.some(builder(stop)), wasPartial: true }))

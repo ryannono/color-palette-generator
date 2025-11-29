@@ -1,10 +1,10 @@
 /** Generates multiple palettes from a batch of color/stop pairs. */
 
-import * as clack from "@clack/prompts"
 import { Array as Arr, Data, Effect, Exit, HashMap, Option as O, pipe } from "effect"
 import type { ColorSpace } from "../../../../../domain/color/color.schema.js"
 import type { StopPosition } from "../../../../../domain/palette/palette.schema.js"
 import { ConfigService } from "../../../../../services/ConfigService.js"
+import { ConsoleService } from "../../../../../services/ConsoleService/index.js"
 import { PaletteService } from "../../../../../services/PaletteService/index.js"
 import type { BatchResult, ColorAnchor } from "../../../../../services/PaletteService/palette.schema.js"
 import { promptForPaletteName, promptForStop } from "../../../../prompts.js"
@@ -85,10 +85,11 @@ export const handleBatchMode = ({
   pattern
 }: BatchModeOptions) =>
   Effect.gen(function*() {
+    const console = yield* ConsoleService
     const mode = toExecutionMode(isInteractive)
-    yield* logWhenInteractive(clack.log.success, Messages.foundColors(pairs.length), mode)
+    yield* logWhenInteractive(console, "success", Messages.foundColors(pairs.length), mode)
 
-    const completedPairs = yield* completeMissingStops(pairs, mode)
+    const completedPairs = yield* completeMissingStops(pairs, mode, console)
     const colorAnchors = toColorAnchors(completedPairs)
     const format = yield* validateFormat(formatOpt)
 
@@ -101,6 +102,7 @@ export const handleBatchMode = ({
 
     const service = yield* PaletteService
     const batchResult = yield* withSpinner(
+      console,
       generateBatch(service, colorAnchors, format, groupName, pattern),
       Messages.generating(colorAnchors.length),
       (result) => Messages.generated(result.palettes.length, result.failures.length),
@@ -117,16 +119,16 @@ export const handleBatchMode = ({
 // Logging
 // ============================================================================
 
+type LogLevel = "success" | "warning" | "error" | "info"
+
 const logWhenInteractive = (
-  logFn: (msg: string) => void,
+  console: ConsoleService,
+  level: LogLevel,
   message: string,
   mode: ExecutionMode
 ): Effect.Effect<void> =>
   pipe(
-    Effect.when(
-      Effect.sync(() => logFn(message)),
-      () => isInteractiveMode(mode)
-    ),
+    Effect.when(console.log[level](message), () => isInteractiveMode(mode)),
     Effect.asVoid
   )
 
@@ -137,7 +139,8 @@ const logWhenInteractive = (
 /** Prompts user for missing stop positions and returns all pairs completed. */
 const completeMissingStops = (
   pairs: Arr.NonEmptyReadonlyArray<ParsedPair>,
-  mode: ExecutionMode
+  mode: ExecutionMode,
+  console: ConsoleService
 ) =>
   Effect.gen(function*() {
     const incomplete = findIncompletePairs(pairs)
@@ -146,7 +149,7 @@ const completeMissingStops = (
       return toCompletePairs(pairs)
     }
 
-    yield* logWhenInteractive(clack.log.warn, Messages.missingStops(incomplete.length), mode)
+    yield* logWhenInteractive(console, "warning", Messages.missingStops(incomplete.length), mode)
 
     const nowComplete = yield* Effect.forEach(
       incomplete,
@@ -246,6 +249,7 @@ const toColorAnchors = (
 
 /** Wraps an effect with spinner feedback in interactive mode. */
 const withSpinner = <A, E, R>(
+  console: ConsoleService,
   effect: Effect.Effect<A, E, R>,
   startMessage: string,
   completeMessage: (result: A) => string,
@@ -253,19 +257,14 @@ const withSpinner = <A, E, R>(
 ): Effect.Effect<A, E, R> =>
   isInteractiveMode(mode)
     ? Effect.acquireUseRelease(
-      Effect.sync(() => {
-        const spinner = clack.spinner()
-        spinner.start(startMessage)
-        return spinner
-      }),
+      Effect.flatMap(console.spinner(), (s) => Effect.as(s.start(startMessage), s)),
       () => effect,
-      (spinner, exit) =>
-        Effect.sync(() => {
-          const message = Exit.isSuccess(exit)
-            ? completeMessage(exit.value)
-            : Messages.operationFailed
-          spinner.stop(message)
-        })
+      (spinner, exit) => {
+        const message = Exit.isSuccess(exit)
+          ? completeMessage(exit.value)
+          : Messages.operationFailed
+        return spinner.stop(message)
+      }
     )
     : effect
 

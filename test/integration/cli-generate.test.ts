@@ -12,8 +12,8 @@ import {
   handleOneToManyTransformation,
   handleSingleTransformation
 } from "../../src/cli/commands/generate/modes/transform/executor.js"
+import { MainTest } from "../../src/layers/MainTest.js"
 import { ConfigService } from "../../src/services/ConfigService.js"
-import { PaletteService } from "../../src/services/PaletteService/index.js"
 
 describe("CLI Generate Command Integration", () => {
   describe("Single Palette Mode", () => {
@@ -35,7 +35,7 @@ describe("CLI Generate Command Integration", () => {
         expect(result.name).toBe("test-palette")
         expect(result.stops).toHaveLength(11)
         expect(result.outputFormat).toBe("hex")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle valid RGB color input", () =>
       Effect.gen(function*() {
@@ -55,7 +55,7 @@ describe("CLI Generate Command Integration", () => {
         expect(result.name).toBe("rgb-test")
         expect(result.stops).toHaveLength(11)
         expect(result.outputFormat).toBe("oklch")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle OKLCH color input", () =>
       Effect.gen(function*() {
@@ -74,7 +74,7 @@ describe("CLI Generate Command Integration", () => {
 
         expect(result.name).toBe("oklch-test")
         expect(result.stops).toHaveLength(11)
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
   })
 
   describe("Batch Palette Mode", () => {
@@ -100,7 +100,7 @@ describe("CLI Generate Command Integration", () => {
         expect(result.failures).toHaveLength(0)
         expect(result.palettes[0].name).toContain("batch-test")
         expect(result.palettes[1].name).toContain("batch-test")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle batch with different output formats", () =>
       Effect.gen(function*() {
@@ -115,7 +115,11 @@ describe("CLI Generate Command Integration", () => {
           nameOpt: O.some("oklch-batch"),
           pairs: [
             { color: "#2D72D2", stop: 500, raw: "#2D72D2::500" },
-            { color: "rgb(219, 44, 111)", stop: 600, raw: "rgb(219, 44, 111)::600" }
+            {
+              color: "rgb(219, 44, 111)",
+              stop: 600,
+              raw: "rgb(219, 44, 111)::600"
+            }
           ],
           pattern: appConfig.patternSource
         })
@@ -123,7 +127,7 @@ describe("CLI Generate Command Integration", () => {
         expect(result.palettes).toHaveLength(2)
         expect(result.palettes[0].outputFormat).toBe("oklch")
         expect(result.palettes[1].outputFormat).toBe("oklch")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
   })
 
   describe("Main Handler with Mode Detection", () => {
@@ -145,7 +149,7 @@ describe("CLI Generate Command Integration", () => {
         // Single mode returns PaletteResult
         expect("name" in result).toBe(true)
         expect((result as any).name).toBe("single-detect")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should detect batch mode from comma-separated input", () =>
       Effect.gen(function*() {
@@ -165,7 +169,7 @@ describe("CLI Generate Command Integration", () => {
         // Batch mode returns BatchGenerationResult
         expect("palettes" in result).toBe(true)
         expect((result as any).palettes).toHaveLength(2)
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should detect batch mode from single color with :: separator", () =>
       Effect.gen(function*() {
@@ -185,7 +189,7 @@ describe("CLI Generate Command Integration", () => {
         // Batch mode returns BatchGenerationResult
         expect("palettes" in result).toBe(true)
         expect((result as any).palettes).toHaveLength(1)
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
   })
 
   describe("Transformation Mode", () => {
@@ -210,7 +214,7 @@ describe("CLI Generate Command Integration", () => {
         expect(result.name).toBe("transform-test")
         expect(result.stops).toHaveLength(11)
         expect(result.anchorStop).toBe(500)
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle one-to-many transformation without export", () =>
       Effect.gen(function*() {
@@ -238,7 +242,7 @@ describe("CLI Generate Command Integration", () => {
           expect(result.stops).toHaveLength(11)
           expect(result.anchorStop).toBe(500)
         })
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle batch transformations without export", () =>
       Effect.gen(function*() {
@@ -270,7 +274,7 @@ describe("CLI Generate Command Integration", () => {
         expect(results[0].name).toBe("batch-transform")
         expect(results[1].name).toBe("batch-transform-#2D72D2")
         expect(results[2].name).toBe("batch-transform-#238551")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle one-to-many transformation with export='none'", () =>
       Effect.gen(function*() {
@@ -294,7 +298,7 @@ describe("CLI Generate Command Integration", () => {
         expect(results).toHaveLength(2)
         expect(results[0].outputFormat).toBe("hex")
         expect(results[1].outputFormat).toBe("hex")
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
 
     it("should handle batch transformations with export='none'", () =>
       Effect.gen(function*() {
@@ -324,6 +328,6 @@ describe("CLI Generate Command Integration", () => {
 
         // Should have 3 results: 2 from one-to-many + 1 from single
         expect(results).toHaveLength(3)
-      }).pipe(Effect.provide(PaletteService.Test)))
+      }).pipe(Effect.provide(MainTest)))
   })
 })

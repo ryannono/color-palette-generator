@@ -7,11 +7,12 @@
  * Uses ModeResolver to detect execution mode and routes to appropriate handler.
  */
 
-import * as clack from "@clack/prompts"
 import { Array as Arr, Effect, Option as O, pipe } from "effect"
 import type { StopPosition } from "../../../domain/palette/palette.schema.js"
 import { ConfigService } from "../../../services/ConfigService.js"
+import { ConsoleService } from "../../../services/ConsoleService/index.js"
 import type { BatchResult, PaletteResult } from "../../../services/PaletteService/palette.schema.js"
+import { PromptService } from "../../../services/PromptService/index.js"
 import {
   promptForAnotherTransformation,
   promptForBatchInputMode,
@@ -72,6 +73,7 @@ const PAIR_SEPARATOR = "::"
 /** Main handler for the generate command. */
 export const handleGenerate = (options: GenerateOptions) =>
   Effect.gen(function*() {
+    const console = yield* ConsoleService
     const pattern = yield* resolvePattern(options.patternOpt)
     const detection = yield* detectExecutionMode(options)
     const context: ModeHandlerContext = {
@@ -83,17 +85,17 @@ export const handleGenerate = (options: GenerateOptions) =>
     }
 
     if (shouldShowIntro(detection, options)) {
-      clack.intro(INTRO_MESSAGE)
+      yield* console.intro(INTRO_MESSAGE)
     }
 
     const interactiveResult = yield* tryInteractiveMode(detection, options, context)
     if (O.isSome(interactiveResult)) {
-      clack.outro("Done!")
+      yield* console.outro("Done!")
       return interactiveResult.value
     }
 
     const result = yield* handleExecutionMode(detection.mode, options, context)
-    clack.outro("Done!")
+    yield* console.outro("Done!")
     return result
   })
 
@@ -116,7 +118,7 @@ const resolvePattern = (patternOpt: O.Option<string>) =>
 
 const detectExecutionMode = (options: GenerateOptions) =>
   Effect.gen(function*() {
-    const resolver = yield* Effect.provide(ModeResolver, ModeResolver.Default)
+    const resolver = yield* ModeResolver
     return yield* resolver.detectMode({
       colorOpt: options.colorOpt,
       stopOpt: options.stopOpt,
@@ -225,7 +227,7 @@ const handleInteractiveTransformLoop = (context: ModeHandlerContext) =>
 
 const collectTransformationsRecursively = (
   accumulated: ReadonlyArray<TransformationRequest | TransformationBatch>
-): Effect.Effect<ReadonlyArray<TransformationRequest | TransformationBatch>, unknown, never> =>
+): Effect.Effect<ReadonlyArray<TransformationRequest | TransformationBatch>, unknown, PromptService> =>
   Effect.gen(function*() {
     const transformation = yield* collectSingleTransformation()
     const updatedList = [...accumulated, transformation]
@@ -236,7 +238,11 @@ const collectTransformationsRecursively = (
       : updatedList
   })
 
-const collectSingleTransformation = (): Effect.Effect<TransformationRequest | TransformationBatch, unknown, never> =>
+const collectSingleTransformation = (): Effect.Effect<
+  TransformationRequest | TransformationBatch,
+  unknown,
+  PromptService
+> =>
   Effect.gen(function*() {
     const referenceColor = yield* promptForReferenceColor()
     const targetColors = yield* promptForTargetColors()
@@ -340,7 +346,7 @@ const resolveTransformationRequest = (
     readonly target?: string | undefined
     readonly stop?: StopPosition | undefined
   }
-): Effect.Effect<TransformationRequest, unknown, never> => {
+): Effect.Effect<TransformationRequest, unknown, PromptService> => {
   const { reference, stop, target } = input
 
   if (reference === undefined || target === undefined) {

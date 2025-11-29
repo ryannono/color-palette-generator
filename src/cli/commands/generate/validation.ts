@@ -5,12 +5,13 @@
  * They are used AFTER mode detection, within each handler.
  */
 
-import * as clack from "@clack/prompts"
 import { Effect, Option as O, pipe } from "effect"
 import type { ParseError } from "effect/ParseResult"
 import { ColorSpace, type ColorSpace as ColorSpaceType, ColorString } from "../../../domain/color/color.schema.js"
 import { StopPosition, type StopPosition as StopPositionType } from "../../../domain/palette/palette.schema.js"
+import { ConsoleService } from "../../../services/ConsoleService/index.js"
 import { ExportTarget, type ExportTarget as ExportTargetType } from "../../../services/ExportService/export.schema.js"
+import { PromptService } from "../../../services/PromptService/index.js"
 import {
   CancelledError,
   promptForColor,
@@ -31,7 +32,7 @@ import {
  */
 type ValidatorConfig<TRawInput, TPromptOutput, TOutput> = {
   readonly validate: (value: TRawInput) => Effect.Effect<TOutput, ParseError>
-  readonly prompt: () => Effect.Effect<TPromptOutput, ParseError | CancelledError>
+  readonly prompt: () => Effect.Effect<TPromptOutput, ParseError | CancelledError, PromptService>
   readonly errorMessage: string
 }
 
@@ -45,14 +46,14 @@ type ValidatorConfig<TRawInput, TPromptOutput, TOutput> = {
 const createValidator = <TRawInput, TPromptOutput extends TRawInput, TOutput>(
   config: ValidatorConfig<TRawInput, TPromptOutput, TOutput>
 ) => {
-  const logErrorAndRetry: Effect.Effect<TOutput, CancelledError> = pipe(
-    Effect.sync(() => clack.log.error(config.errorMessage)),
+  const logErrorAndRetry: Effect.Effect<TOutput, CancelledError, ConsoleService | PromptService> = pipe(
+    Effect.flatMap(ConsoleService, (console) => console.log.error(config.errorMessage)),
     Effect.flatMap(() => config.prompt()),
     Effect.flatMap(config.validate),
     Effect.catchTag("ParseError", () => logErrorAndRetry)
   )
 
-  return (opt: O.Option<TRawInput>): Effect.Effect<TOutput, CancelledError> =>
+  return (opt: O.Option<TRawInput>): Effect.Effect<TOutput, CancelledError, ConsoleService | PromptService> =>
     pipe(
       O.match(opt, {
         onNone: () => pipe(config.prompt(), Effect.flatMap(config.validate)),
@@ -73,7 +74,9 @@ const createValidator = <TRawInput, TPromptOutput extends TRawInput, TOutput>(
 /**
  * Validate color input with retry on error (for single mode)
  */
-export const validateColor = (colorOpt: O.Option<string>): Effect.Effect<string, CancelledError> =>
+export const validateColor = (
+  colorOpt: O.Option<string>
+): Effect.Effect<string, CancelledError, ConsoleService | PromptService> =>
   createValidator<string, string, string>({
     validate: ColorString,
     prompt: promptForColor,
@@ -83,7 +86,9 @@ export const validateColor = (colorOpt: O.Option<string>): Effect.Effect<string,
 /**
  * Validate stop position with retry on error
  */
-export const validateStop = (stopOpt: O.Option<number>): Effect.Effect<StopPositionType, CancelledError> =>
+export const validateStop = (
+  stopOpt: O.Option<number>
+): Effect.Effect<StopPositionType, CancelledError, ConsoleService | PromptService> =>
   createValidator<number, StopPositionType, StopPositionType>({
     validate: StopPosition,
     prompt: promptForStop,
@@ -93,7 +98,9 @@ export const validateStop = (stopOpt: O.Option<number>): Effect.Effect<StopPosit
 /**
  * Validate output format with retry on error
  */
-export const validateFormat = (formatOpt: O.Option<string>): Effect.Effect<ColorSpaceType, CancelledError> =>
+export const validateFormat = (
+  formatOpt: O.Option<string>
+): Effect.Effect<ColorSpaceType, CancelledError, ConsoleService | PromptService> =>
   createValidator<string, ColorSpaceType, ColorSpaceType>({
     validate: ColorSpace,
     prompt: promptForOutputFormat,
@@ -103,7 +110,9 @@ export const validateFormat = (formatOpt: O.Option<string>): Effect.Effect<Color
 /**
  * Validate export target with retry on error
  */
-export const validateExportTarget = (exportOpt: O.Option<string>): Effect.Effect<ExportTargetType, CancelledError> =>
+export const validateExportTarget = (
+  exportOpt: O.Option<string>
+): Effect.Effect<ExportTargetType, CancelledError, ConsoleService | PromptService> =>
   createValidator<string, ExportTargetType, ExportTargetType>({
     validate: ExportTarget,
     prompt: promptForExportTarget,

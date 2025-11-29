@@ -5,6 +5,7 @@
 import { Effect, Either, Option as O } from "effect"
 import { describe, expect, it } from "vitest"
 import { ModeResolver } from "../../../src/cli/commands/generate/modes/resolver.js"
+import { MainTest } from "../../../src/layers/MainTest.js"
 
 describe("ModeResolver Service", () => {
   describe("Single Palette Mode Detection", () => {
@@ -28,7 +29,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.color).toBe("#2D72D2")
           expect(result.mode.stop).toBe(500)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect single palette mode with color only", () =>
       Effect.gen(function*() {
@@ -50,7 +51,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.color).toBe("#2D72D2")
           expect(result.mode.stop).toBeUndefined()
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect interactive mode when no color provided", () =>
       Effect.gen(function*() {
@@ -67,7 +68,7 @@ describe("ModeResolver Service", () => {
 
         expect(result.isInteractive).toBe(true)
         expect(result.mode._tag).toBe("SinglePalette")
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 
   describe("Batch Palette Mode Detection", () => {
@@ -90,7 +91,7 @@ describe("ModeResolver Service", () => {
         if (result.mode._tag === "BatchPalettes") {
           expect(result.mode.pairs).toHaveLength(2)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect batch mode from color::stop pairs", () =>
       Effect.gen(function*() {
@@ -113,7 +114,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.pairs[0].stop).toBe(500)
           expect(result.mode.pairs[1].stop).toBe(600)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect batch mode from single color with :: separator", () =>
       Effect.gen(function*() {
@@ -136,7 +137,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.pairs[0].color).toBe("#2D72D2")
           expect(result.mode.pairs[0].stop).toBe(500)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 
   describe("Single Transformation Mode Detection", () => {
@@ -161,7 +162,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.input.target).toContain("238551")
           expect(result.mode.input.stop).toBe(500)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect single transformation mode without stop (partial)", () =>
       Effect.gen(function*() {
@@ -184,7 +185,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.input.target).toContain("666666")
           expect(result.mode.input.stop).toBeUndefined()
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should handle transformation with # prefix", () =>
       Effect.gen(function*() {
@@ -201,7 +202,7 @@ describe("ModeResolver Service", () => {
 
         expect(result.isInteractive).toBe(false)
         expect(result.mode._tag).toBe("SingleTransform")
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 
   describe("Many Transformation Mode Detection", () => {
@@ -228,7 +229,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.targets[1]).toContain("DC143C")
           expect(result.mode.stop).toBe(500)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect one-to-many transformation mode without stop (partial)", () =>
       Effect.gen(function*() {
@@ -255,7 +256,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.targets[3]).toContain("CD4246")
           expect(result.mode.stop).toBeUndefined()
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 
   describe("Batch Transformation Mode Detection", () => {
@@ -278,7 +279,7 @@ describe("ModeResolver Service", () => {
         if (result.mode._tag === "BatchTransform") {
           expect(result.mode.transformations).toHaveLength(2)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect batch transformation mode without stops (partial)", () =>
       Effect.gen(function*() {
@@ -301,7 +302,7 @@ describe("ModeResolver Service", () => {
           expect(result.mode.transformations[0].stop).toBeUndefined()
           expect(result.mode.transformations[1].stop).toBeUndefined()
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect batch transformation mode with mixed single and one-to-many", () =>
       Effect.gen(function*() {
@@ -342,7 +343,7 @@ describe("ModeResolver Service", () => {
             throw new Error("Second transformation should be single with target property")
           }
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should detect batch transformation mode from newline-separated", () =>
       Effect.gen(function*() {
@@ -363,7 +364,7 @@ describe("ModeResolver Service", () => {
         if (result.mode._tag === "BatchTransform") {
           expect(result.mode.transformations).toHaveLength(2)
         }
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 
   describe("Error Handling", () => {
@@ -383,7 +384,7 @@ describe("ModeResolver Service", () => {
         )
 
         expect(Either.isLeft(result)).toBe(true)
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
 
     it("should fail with invalid stop position", () =>
       Effect.gen(function*() {
@@ -401,6 +402,6 @@ describe("ModeResolver Service", () => {
         )
 
         expect(Either.isLeft(result)).toBe(true)
-      }).pipe(Effect.provide(ModeResolver.Default), Effect.runPromise))
+      }).pipe(Effect.provide(MainTest), Effect.runPromise))
   })
 })

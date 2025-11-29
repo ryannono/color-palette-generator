@@ -5,15 +5,16 @@
  * and handling export operations.
  */
 
-import * as clack from "@clack/prompts"
-import { Array as Arr, Effect, Option as O, ParseResult, pipe } from "effect"
+import { Effect, Option as O, ParseResult, pipe } from "effect"
 import { ColorSpace } from "../../../../domain/color/color.schema.js"
 import { StopPosition } from "../../../../domain/palette/palette.schema.js"
+import { ConsoleService } from "../../../../services/ConsoleService/index.js"
 import type { ExportConfig, JSONPath as JSONPathType } from "../../../../services/ExportService/export.schema.js"
 import { JSONPath } from "../../../../services/ExportService/export.schema.js"
 import { ExportService } from "../../../../services/ExportService/index.js"
 import { PaletteService } from "../../../../services/PaletteService/index.js"
 import { BatchResult, PaletteRequest, type PaletteResult } from "../../../../services/PaletteService/palette.schema.js"
+import { PromptService } from "../../../../services/PromptService/index.js"
 import { CancelledError, promptForJsonPath } from "../../../prompts.js"
 import { validateExportTarget } from "../validation.js"
 
@@ -84,8 +85,9 @@ export const generateAndDisplay = ({
  * showing input color, anchor stop, format, and all generated stops.
  */
 export const displayPalette = (result: PaletteResult) =>
-  Effect.sync(() => {
-    clack.note(formatPaletteNote(result), Messages.paletteTitle(result.name))
+  Effect.gen(function*() {
+    const console = yield* ConsoleService
+    yield* console.note(formatPaletteNote(result), Messages.paletteTitle(result.name))
   })
 
 /**
@@ -95,19 +97,19 @@ export const displayPalette = (result: PaletteResult) =>
  * and each generated palette in the batch.
  */
 export const displayBatch = (batch: BatchResult) =>
-  Effect.sync(() => {
-    clack.log.success(Messages.batchStatus(batch.palettes.length, batch.failures.length))
-    clack.log.info(Messages.group(batch.groupName))
-    clack.log.info(Messages.format(batch.outputFormat))
+  Effect.gen(function*() {
+    const console = yield* ConsoleService
+
+    yield* console.log.success(Messages.batchStatus(batch.palettes.length, batch.failures.length))
+    yield* console.log.info(Messages.group(batch.groupName))
+    yield* console.log.info(Messages.format(batch.outputFormat))
 
     // Display any failures
-    Arr.forEach(batch.failures, (failure) => {
-      clack.log.warning(Messages.failure(failure.color, failure.stop, failure.error))
-    })
+    yield* Effect.forEach(batch.failures, (failure) =>
+      console.log.warning(Messages.failure(failure.color, failure.stop, failure.error)))
 
-    Arr.forEach(batch.palettes, (palette) => {
-      clack.note(formatBatchPaletteNote(palette), palette.name)
-    })
+    yield* Effect.forEach(batch.palettes, (palette) =>
+      console.note(formatBatchPaletteNote(palette), palette.name))
   })
 
 /**
@@ -188,7 +190,7 @@ const getExportSuccessMessage = (config: ExportConfig): string =>
 const resolveJsonPath = (
   exportTarget: ExportConfig["target"],
   exportPath: O.Option<string>
-): Effect.Effect<JSONPathType | undefined, ParseResult.ParseError | CancelledError> =>
+): Effect.Effect<JSONPathType | undefined, ParseResult.ParseError | CancelledError, PromptService> =>
   exportTarget === "json"
     ? pipe(
       exportPath,
@@ -201,6 +203,7 @@ const resolveJsonPath = (
 
 /** Log export success message */
 const logExportSuccess = (config: ExportConfig) =>
-  Effect.sync(() => {
-    clack.log.success(getExportSuccessMessage(config))
+  Effect.gen(function*() {
+    const console = yield* ConsoleService
+    yield* console.log.success(getExportSuccessMessage(config))
   })

@@ -1,11 +1,11 @@
 /**
- * Interactive CLI prompts using @clack/prompts
+ * Interactive CLI prompts using PromptService
  *
- * All prompts return Effects with schema validation
+ * All prompts return Effects with schema validation.
+ * Uses PromptService for testable IO abstraction.
  */
 
-import * as clack from "@clack/prompts"
-import { Data, Effect } from "effect"
+import { Effect } from "effect"
 import type { ParseError } from "effect/ParseResult"
 import { ColorSpace, ColorString } from "../domain/color/color.schema.js"
 import {
@@ -22,20 +22,10 @@ import {
   JSONPath,
   type JSONPath as JSONPathType
 } from "../services/ExportService/export.schema.js"
+import { CancelledError, PromptService } from "../services/PromptService/index.js"
 
-// ============================================================================
-// Errors
-// ============================================================================
-
-/**
- * Error thrown when user cancels an operation (e.g., Ctrl+C in prompts)
- *
- * This error should be caught at the CLI entry point and result in a
- * graceful exit with code 0 (not an error condition).
- */
-export class CancelledError extends Data.TaggedError("CancelledError")<{
-  readonly message: string
-}> {}
+// Re-export CancelledError for backwards compatibility
+export { CancelledError }
 
 // ============================================================================
 // Public API
@@ -44,18 +34,18 @@ export class CancelledError extends Data.TaggedError("CancelledError")<{
 /**
  * Prompt for color input
  */
-export const promptForColor = (): Effect.Effect<string, ParseError | CancelledError> =>
+export const promptForColor = (): Effect.Effect<string, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const color = yield* Effect.promise(() =>
-      clack.text({
-        message: "Enter a color:",
-        placeholder: "#2D72D2 or 2D72D2",
-        validate: (value) => {
-          if (!value) return "Color is required"
-          return undefined
-        }
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const color = yield* promptService.text({
+      message: "Enter a color:",
+      placeholder: "#2D72D2 or 2D72D2",
+      validate: (value) => {
+        if (!value) return "Color is required"
+        return undefined
+      }
+    })
 
     return yield* ColorString(color)
   })
@@ -66,19 +56,18 @@ export const promptForColor = (): Effect.Effect<string, ParseError | CancelledEr
 export const promptForStop = (
   color?: ColorString,
   colorIndex?: number
-): Effect.Effect<StopPositionType, ParseError | CancelledError> =>
+): Effect.Effect<StopPositionType, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
+    const promptService = yield* PromptService
     const message = buildStopMessage(color, colorIndex)
 
-    const stop = yield* Effect.promise(() =>
-      clack.select({
-        message,
-        options: STOP_POSITIONS.map((pos) => ({
-          label: `${pos}${getStopDescription(pos)}`,
-          value: pos
-        }))
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const stop = yield* promptService.select({
+      message,
+      options: STOP_POSITIONS.map((pos) => ({
+        label: `${pos}${getStopDescription(pos)}`,
+        value: pos
+      }))
+    })
 
     return yield* StopPosition(stop)
   })
@@ -86,19 +75,19 @@ export const promptForStop = (
 /**
  * Prompt for output format
  */
-export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError | CancelledError> =>
+export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const format = yield* Effect.promise(() =>
-      clack.select({
-        message: "Choose output format:",
-        options: [
-          { label: "Hex (#RRGGBB)", value: "hex", hint: "e.g., #2D72D2" },
-          { label: "RGB", value: "rgb", hint: "e.g., rgb(45, 114, 210)" },
-          { label: "OKLCH", value: "oklch", hint: "e.g., oklch(57.23% 0.154 258.7)" },
-          { label: "OKLAB", value: "oklab", hint: "e.g., oklab(57.23% -0.051 -0.144)" }
-        ]
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const format = yield* promptService.select({
+      message: "Choose output format:",
+      options: [
+        { label: "Hex (#RRGGBB)", value: "hex", hint: "e.g., #2D72D2" },
+        { label: "RGB", value: "rgb", hint: "e.g., rgb(45, 114, 210)" },
+        { label: "OKLCH", value: "oklch", hint: "e.g., oklch(57.23% 0.154 258.7)" },
+        { label: "OKLAB", value: "oklab", hint: "e.g., oklab(57.23% -0.051 -0.144)" }
+      ]
+    })
 
     return yield* ColorSpace(format)
   })
@@ -108,15 +97,15 @@ export const promptForOutputFormat = (): Effect.Effect<ColorSpace, ParseError | 
  */
 export const promptForPaletteName = (
   defaultName: string
-): Effect.Effect<string, CancelledError> =>
+): Effect.Effect<string, CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const name = yield* Effect.promise(() =>
-      clack.text({
-        message: "Palette name (optional):",
-        placeholder: defaultName,
-        defaultValue: defaultName
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const name = yield* promptService.text({
+      message: "Palette name (optional):",
+      placeholder: defaultName,
+      defaultValue: defaultName
+    })
 
     return name || defaultName
   })
@@ -124,30 +113,34 @@ export const promptForPaletteName = (
 /**
  * Prompt for batch input mode
  */
-export const promptForBatchInputMode = (): Effect.Effect<BatchInputModeType, ParseError | CancelledError> =>
+export const promptForBatchInputMode = (): Effect.Effect<
+  BatchInputModeType,
+  ParseError | CancelledError,
+  PromptService
+> =>
   Effect.gen(function*() {
-    const mode = yield* Effect.promise(() =>
-      clack.select({
-        message: "How would you like to generate palettes?",
-        options: [
-          {
-            label: "Paste multiple colors",
-            value: "paste",
-            hint: "Batch mode: multi-line or comma-separated"
-          },
-          {
-            label: "Enter a single color",
-            value: "cycle",
-            hint: "Interactive prompts for one palette"
-          },
-          {
-            label: "Transform colors (apply optical appearance)",
-            value: "transform",
-            hint: "Apply lightness+chroma from one color to another's hue"
-          }
-        ]
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const mode = yield* promptService.select({
+      message: "How would you like to generate palettes?",
+      options: [
+        {
+          label: "Paste multiple colors",
+          value: "paste",
+          hint: "Batch mode: multi-line or comma-separated"
+        },
+        {
+          label: "Enter a single color",
+          value: "cycle",
+          hint: "Interactive prompts for one palette"
+        },
+        {
+          label: "Transform colors (apply optical appearance)",
+          value: "transform",
+          hint: "Apply lightness+chroma from one color to another's hue"
+        }
+      ]
+    })
 
     return yield* BatchInputMode(mode)
   })
@@ -155,20 +148,20 @@ export const promptForBatchInputMode = (): Effect.Effect<BatchInputModeType, Par
 /**
  * Prompt for paste mode batch input
  */
-export const promptForBatchPaste = (): Effect.Effect<string, ParseError | CancelledError> =>
+export const promptForBatchPaste = (): Effect.Effect<string, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const input = yield* Effect.promise(() =>
-      clack.text({
-        message: "Paste color/stop pairs:",
-        placeholder: "#2D72D2::500\n#163F79::700\nor: #2D72D2:500, #163F79:700",
-        validate: (value) => {
-          if (!value || value.trim().length === 0) {
-            return "Input is required"
-          }
-          return undefined
+    const promptService = yield* PromptService
+
+    const input = yield* promptService.text({
+      message: "Paste color/stop pairs:",
+      placeholder: "#2D72D2::500\n#163F79::700\nor: #2D72D2:500, #163F79:700",
+      validate: (value) => {
+        if (!value || value.trim().length === 0) {
+          return "Input is required"
         }
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+        return undefined
+      }
+    })
 
     return yield* BatchPasteInput(input)
   })
@@ -176,18 +169,18 @@ export const promptForBatchPaste = (): Effect.Effect<string, ParseError | Cancel
 /**
  * Prompt for export target
  */
-export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseError | CancelledError> =>
+export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const target = yield* Effect.promise(() =>
-      clack.select({
-        message: "Where to export the result?",
-        options: [
-          { label: "Display only (no export)", value: "none" },
-          { label: "Copy to clipboard", value: "clipboard" },
-          { label: "Save to JSON file", value: "json" }
-        ]
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const target = yield* promptService.select({
+      message: "Where to export the result?",
+      options: [
+        { label: "Display only (no export)", value: "none" },
+        { label: "Copy to clipboard", value: "clipboard" },
+        { label: "Save to JSON file", value: "json" }
+      ]
+    })
 
     return yield* ExportTarget(target)
   })
@@ -195,20 +188,20 @@ export const promptForExportTarget = (): Effect.Effect<ExportTargetType, ParseEr
 /**
  * Prompt for JSON file path
  */
-export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError | CancelledError> =>
+export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const path = yield* Effect.promise(() =>
-      clack.text({
-        message: "Enter JSON file path:",
-        placeholder: "./output/palettes.json",
-        validate: (value) => {
-          if (!value || value.trim().length === 0) {
-            return "File path is required"
-          }
-          return undefined
+    const promptService = yield* PromptService
+
+    const path = yield* promptService.text({
+      message: "Enter JSON file path:",
+      placeholder: "./output/palettes.json",
+      validate: (value) => {
+        if (!value || value.trim().length === 0) {
+          return "File path is required"
         }
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+        return undefined
+      }
+    })
 
     return yield* JSONPath(path)
   })
@@ -216,18 +209,18 @@ export const promptForJsonPath = (): Effect.Effect<JSONPathType, ParseError | Ca
 /**
  * Prompt for transformation reference color
  */
-export const promptForReferenceColor = (): Effect.Effect<string, ParseError | CancelledError> =>
+export const promptForReferenceColor = (): Effect.Effect<string, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const color = yield* Effect.promise(() =>
-      clack.text({
-        message: "Enter reference color (source of lightness + chroma):",
-        placeholder: "#2D72D2 or 2D72D2",
-        validate: (value) => {
-          if (!value) return "Reference color is required"
-          return undefined
-        }
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const color = yield* promptService.text({
+      message: "Enter reference color (source of lightness + chroma):",
+      placeholder: "#2D72D2 or 2D72D2",
+      validate: (value) => {
+        if (!value) return "Reference color is required"
+        return undefined
+      }
+    })
 
     return yield* ColorString(color)
   })
@@ -235,18 +228,18 @@ export const promptForReferenceColor = (): Effect.Effect<string, ParseError | Ca
 /**
  * Prompt for transformation target color(s)
  */
-export const promptForTargetColors = (): Effect.Effect<Array<string>, ParseError | CancelledError> =>
+export const promptForTargetColors = (): Effect.Effect<Array<string>, ParseError | CancelledError, PromptService> =>
   Effect.gen(function*() {
-    const input = yield* Effect.promise(() =>
-      clack.text({
-        message: "Enter target color(s) (hue to preserve):",
-        placeholder: "Single: 238551  or  Multiple: 238551,DC143C,FF6B6B",
-        validate: (value) => {
-          if (!value) return "At least one target color is required"
-          return undefined
-        }
-      })
-    ).pipe(Effect.flatMap(handleCancel))
+    const promptService = yield* PromptService
+
+    const input = yield* promptService.text({
+      message: "Enter target color(s) (hue to preserve):",
+      placeholder: "Single: 238551  or  Multiple: 238551,DC143C,FF6B6B",
+      validate: (value) => {
+        if (!value) return "At least one target color is required"
+        return undefined
+      }
+    })
 
     // Split by comma and validate each
     const colorInputs = input.split(",").map((c) => c.trim()).filter((c) => c.length > 0)
@@ -261,33 +254,20 @@ export const promptForTargetColors = (): Effect.Effect<Array<string>, ParseError
  * Note: Treats cancel as "no" rather than exiting the program,
  * since we already have valid input and just want to know if more is coming.
  */
-export const promptForAnotherTransformation = (): Effect.Effect<boolean, never> =>
+export const promptForAnotherTransformation = (): Effect.Effect<boolean, never, PromptService> =>
   Effect.gen(function*() {
-    const answer = yield* Effect.promise(() =>
-      clack.confirm({
-        message: "Add another transformation?"
-      })
-    )
+    const promptService = yield* PromptService
 
-    return clack.isCancel(answer) ? false : answer
+    const answer = yield* promptService.confirm({
+      message: "Add another transformation?"
+    }).pipe(Effect.catchAll(() => Effect.succeed(false)))
+
+    return answer
   })
 
 // ============================================================================
 // Helpers
 // ============================================================================
-
-/**
- * Handle cancellation by returning a CancelledError
- *
- * This keeps cancellation in the Effect error channel, allowing it to be
- * handled at the CLI entry point rather than abruptly terminating the process.
- */
-const handleCancel = <T>(value: T | symbol): Effect.Effect<T, CancelledError> => {
-  if (clack.isCancel(value)) {
-    return Effect.fail(new CancelledError({ message: "Operation cancelled" }))
-  }
-  return Effect.succeed(value)
-}
 
 /**
  * Stop position descriptions

@@ -5,6 +5,7 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect } from "effect"
 import { CONFIG_DEFAULTS } from "../../../src/config/defaults.js"
+import { MainTest } from "../../../src/layers/MainTest.js"
 import { ConfigService } from "../../../src/services/ConfigService.js"
 
 describe("ConfigService", () => {
@@ -15,10 +16,14 @@ describe("ConfigService", () => {
 
       // Should use test defaults
       expect(config.patternSource).toBe(CONFIG_DEFAULTS.test.patternSource)
-      expect(config.defaultOutputFormat).toBe(CONFIG_DEFAULTS.test.defaultOutputFormat)
-      expect(config.defaultPaletteName).toBe(CONFIG_DEFAULTS.test.defaultPaletteName)
+      expect(config.defaultOutputFormat).toBe(
+        CONFIG_DEFAULTS.test.defaultOutputFormat
+      )
+      expect(config.defaultPaletteName).toBe(
+        CONFIG_DEFAULTS.test.defaultPaletteName
+      )
       expect(config.maxConcurrency).toBe(CONFIG_DEFAULTS.test.maxConcurrency)
-    }).pipe(Effect.provide(ConfigService.Test)))
+    }).pipe(Effect.provide(MainTest)))
 
   it.effect("should provide pattern source convenience method", () =>
     Effect.gen(function*() {
@@ -26,5 +31,5 @@ describe("ConfigService", () => {
       const patternSource = yield* service.getPatternSource()
 
       expect(patternSource).toBe(CONFIG_DEFAULTS.test.patternSource)
-    }).pipe(Effect.provide(ConfigService.Test)))
+    }).pipe(Effect.provide(MainTest)))
 })

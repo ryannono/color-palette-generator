@@ -3,10 +3,10 @@
  */
 
 import { FileSystem, Path } from "@effect/platform"
-import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Either, Layer, ParseResult, Schema } from "effect"
+import { Effect, Either, ParseResult, Schema } from "effect"
 import { vi } from "vitest"
+import { MainTest } from "../../../src/layers/MainTest.js"
 import { ExportError, ExportService, JSONPath } from "../../../src/services/ExportService/index.js"
 import {
   type BatchResult,
@@ -23,12 +23,6 @@ vi.mock("clipboardy", () => ({
     read: vi.fn().mockResolvedValue("")
   }
 }))
-
-// Test layer that provides all dependencies
-const TestLayer = Layer.mergeAll(
-  NodeFileSystem.layer,
-  NodePath.layer
-).pipe(Layer.provideMerge(ExportService.Default))
 
 describe("ExportService", () => {
   // Sample palette for testing
@@ -62,7 +56,9 @@ describe("ExportService", () => {
     outputFormat: "hex",
     palettes: [samplePalette],
     failures: [],
-    generatedAt: Schema.decodeSync(ISOTimestampSchema)(new Date().toISOString())
+    generatedAt: Schema.decodeSync(ISOTimestampSchema)(
+      new Date().toISOString()
+    )
   }
 
   describe("exportPalette", () => {
@@ -93,7 +89,7 @@ describe("ExportService", () => {
 
         // Clean up
         yield* fs.remove(testPath, { recursive: true })
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
     it.effect("should export palette to clipboard", () =>
       Effect.gen(function*() {
@@ -111,7 +107,7 @@ describe("ExportService", () => {
         const json = lastCall[0] as string
         const parsed = JSON.parse(json)
         expect(parsed.name).toBe("test-palette")
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
     it.effect("should do nothing when target is 'none'", () =>
       Effect.gen(function*() {
@@ -121,43 +117,43 @@ describe("ExportService", () => {
         yield* service.exportPalette(samplePalette, {
           target: "none"
         })
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
-    it.effect("should fail with ExportError when jsonPath is missing for json target", () =>
-      Effect.gen(function*() {
-        const service = yield* ExportService
-        const result = yield* Effect.either(
-          service.exportPalette(samplePalette, {
-            target: "json"
-          })
-        )
+    it.effect(
+      "should fail with ExportError when jsonPath is missing for json target",
+      () =>
+        Effect.gen(function*() {
+          const service = yield* ExportService
+          const result = yield* Effect.either(
+            service.exportPalette(samplePalette, {
+              target: "json"
+            })
+          )
 
-        expect(Either.isLeft(result)).toBe(true)
-        if (Either.isLeft(result)) {
-          expect(result.left).toBeInstanceOf(ExportError)
-          expect(result.left.message).toContain("Invalid JSON path:")
-        }
-      }).pipe(Effect.provide(TestLayer)))
+          expect(Either.isLeft(result)).toBe(true)
+          if (Either.isLeft(result)) {
+            expect(result.left).toBeInstanceOf(ExportError)
+            expect(result.left.message).toContain("Invalid JSON path:")
+          }
+        }).pipe(Effect.provide(MainTest))
+    )
 
     it.effect("should fail with ParseError for invalid file path", () =>
       Effect.gen(function*() {
         const service = yield* ExportService
         const result = yield* Effect.either(
-          Effect.flatMap(
-            JSONPath("/invalid/\0/path.json"),
-            (validatedPath) =>
-              service.exportPalette(samplePalette, {
-                target: "json",
-                jsonPath: validatedPath
-              })
-          )
+          Effect.flatMap(JSONPath("/invalid/\0/path.json"), (validatedPath) =>
+            service.exportPalette(samplePalette, {
+              target: "json",
+              jsonPath: validatedPath
+            }))
         )
 
         expect(Either.isLeft(result)).toBe(true)
         if (Either.isLeft(result)) {
           expect(result.left).toBeInstanceOf(ParseResult.ParseError)
         }
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
   })
 
   describe("exportBatch", () => {
@@ -188,7 +184,7 @@ describe("ExportService", () => {
 
         // Clean up
         yield* fs.remove(testPath, { recursive: true })
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
     it.effect("should export batch to clipboard", () =>
       Effect.gen(function*() {
@@ -206,7 +202,7 @@ describe("ExportService", () => {
         const json = lastCall[0] as string
         const parsed = JSON.parse(json)
         expect(parsed.groupName).toBe("test-batch")
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
     it.effect("should do nothing when target is 'none'", () =>
       Effect.gen(function*() {
@@ -216,22 +212,25 @@ describe("ExportService", () => {
         yield* service.exportBatch(sampleBatch, {
           target: "none"
         })
-      }).pipe(Effect.provide(TestLayer)))
+      }).pipe(Effect.provide(MainTest)))
 
-    it.effect("should fail with ExportError when jsonPath is missing for json target", () =>
-      Effect.gen(function*() {
-        const service = yield* ExportService
-        const result = yield* Effect.either(
-          service.exportBatch(sampleBatch, {
-            target: "json"
-          })
-        )
+    it.effect(
+      "should fail with ExportError when jsonPath is missing for json target",
+      () =>
+        Effect.gen(function*() {
+          const service = yield* ExportService
+          const result = yield* Effect.either(
+            service.exportBatch(sampleBatch, {
+              target: "json"
+            })
+          )
 
-        expect(Either.isLeft(result)).toBe(true)
-        if (Either.isLeft(result)) {
-          expect(result.left).toBeInstanceOf(ExportError)
-          expect(result.left.message).toContain("Invalid JSON path:")
-        }
-      }).pipe(Effect.provide(TestLayer)))
+          expect(Either.isLeft(result)).toBe(true)
+          if (Either.isLeft(result)) {
+            expect(result.left).toBeInstanceOf(ExportError)
+            expect(result.left.message).toContain("Invalid JSON path:")
+          }
+        }).pipe(Effect.provide(MainTest))
+    )
   })
 })
