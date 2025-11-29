@@ -138,7 +138,7 @@ const getCurrentISOTimestamp = Effect.clockWith((clock) =>
 
 /** Provides palette generation with dependency injection for PatternService and ConfigService. */
 export class PaletteService extends Effect.Service<PaletteService>()(
-  "PaletteService",
+  "@oklch-palette-generator/services/PaletteService",
   {
     effect: Effect.gen(function*() {
       const patternService = yield* PatternService

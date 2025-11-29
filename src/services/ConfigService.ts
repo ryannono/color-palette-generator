@@ -99,7 +99,7 @@ const appConfigConfig: Config.Config<AppConfig> = Config.all({
  * Loads and validates config from environment variables at initialization.
  */
 export class ConfigService extends Effect.Service<ConfigService>()(
-  "ConfigService",
+  "@oklch-palette-generator/services/ConfigService",
   {
     effect: Effect.gen(function*() {
       const config = yield* appConfigConfig
@@ -117,7 +117,7 @@ export class ConfigService extends Effect.Service<ConfigService>()(
    * Note: .Default provides a Layer that is lazily evaluated when provided,
    * so Schema.decode errors only surface when the layer is actually used in tests.
    */
-  static readonly Test = Effect.Service<ConfigService>()("ConfigService", {
+  static readonly Test = Effect.Service<ConfigService>()("@oklch-palette-generator/services/ConfigService", {
     effect: Effect.gen(function*() {
       const patternSource = yield* Schema.decode(FilePathSchema)(
         CONFIG_DEFAULTS.test.patternSource

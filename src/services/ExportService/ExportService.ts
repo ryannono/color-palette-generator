@@ -39,7 +39,7 @@ export class ExportError extends Data.TaggedError("ExportError")<{
 /**
  * Export service using Effect.Service pattern
  */
-export class ExportService extends Effect.Service<ExportService>()("ExportService", {
+export class ExportService extends Effect.Service<ExportService>()("@oklch-palette-generator/services/ExportService", {
   effect: Effect.gen(function*() {
     const fs = yield* FileSystem.FileSystem
     const path = yield* Path.Path
@@ -59,7 +59,14 @@ export class ExportService extends Effect.Service<ExportService>()("ExportServic
     }
   }),
   dependencies: [NodeFileSystem.layer, NodePath.layer]
-}) {}
+}) {
+  /**
+   * Test layer - uses the same implementation with platform dependencies.
+   * For unit tests that need to mock file system, use DefaultWithoutDependencies
+   * with a mock FileSystem layer.
+   */
+  static readonly Test = ExportService.Default
+}
 
 // ============================================================================
 // Export Helpers

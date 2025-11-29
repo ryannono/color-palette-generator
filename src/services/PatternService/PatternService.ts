@@ -34,156 +34,158 @@ export class PatternLoadError extends Data.TaggedError("PatternLoadError")<{
 /**
  * Pattern service with file loading and pattern extraction
  */
-export class PatternService extends Effect.Service<PatternService>()("PatternService", {
-  effect: Effect.gen(function*() {
-    const fs = yield* FileSystem.FileSystem
-    const path = yield* Path.Path
+export class PatternService
+  extends Effect.Service<PatternService>()("@oklch-palette-generator/services/PatternService", {
+    effect: Effect.gen(function*() {
+      const fs = yield* FileSystem.FileSystem
+      const path = yield* Path.Path
 
-    /**
-     * Load palette from JSON file and convert colors to OKLCH
-     */
-    const loadPalette = (
-      filePath: FilePath
-    ): Effect.Effect<AnalyzedPalette, PatternLoadError> =>
-      Effect.gen(function*() {
-        const fileContent = yield* fs.readFileString(filePath).pipe(
-          Effect.mapError(
-            (error) =>
+      /**
+       * Load palette from JSON file and convert colors to OKLCH
+       */
+      const loadPalette = (
+        filePath: FilePath
+      ): Effect.Effect<AnalyzedPalette, PatternLoadError> =>
+        Effect.gen(function*() {
+          const fileContent = yield* fs.readFileString(filePath).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Failed to read palette file: ${filePath}`,
+                  cause: error
+                })
+            )
+          )
+
+          const jsonData = yield* parseJson(fileContent, filePath)
+
+          const examplePalette = yield* ExamplePaletteRequest(jsonData).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Invalid palette schema: ${filePath}`,
+                  cause: error
+                })
+            )
+          )
+
+          const stopsWithOKLCH = yield* Effect.forEach(
+            examplePalette.stops,
+            (stop) =>
+              Effect.gen(function*() {
+                const oklch = yield* parseColorStringToOKLCH(stop.hex)
+                return {
+                  position: stop.position,
+                  color: oklch
+                }
+              }),
+            { concurrency: "unbounded" }
+          ).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Failed to convert colors to OKLCH: ${filePath}`,
+                  cause: error
+                })
+            )
+          )
+
+          return {
+            name: examplePalette.name,
+            stops: stopsWithOKLCH
+          }
+        })
+
+      /**
+       * Load pattern from file, extract and smooth transformations
+       */
+      const loadPattern = (
+        source: FilePath
+      ): Effect.Effect<TransformationPattern, PatternLoadError> =>
+        Effect.gen(function*() {
+          const palette = yield* loadPalette(source)
+          const pattern = yield* extractPatterns([palette]).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Failed to extract pattern from: ${source}`,
+                  cause: error
+                })
+            )
+          )
+          return yield* smoothPatternWithError(pattern, source)
+        })
+
+      /**
+       * Load multiple palettes from directory and extract combined pattern
+       */
+      const loadPatternsFromDirectory = (
+        directoryPath: DirectoryPath
+      ): Effect.Effect<
+        {
+          readonly palettes: ReadonlyArray<AnalyzedPalette>
+          readonly pattern: TransformationPattern
+        },
+        PatternLoadError
+      > =>
+        Effect.gen(function*() {
+          const files = yield* fs.readDirectory(directoryPath).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Failed to read directory: ${directoryPath}`,
+                  cause: error
+                })
+            )
+          )
+
+          const jsonFiles = filterJsonFiles(files)
+
+          if (jsonFiles.length === 0) {
+            return yield* Effect.fail(
               new PatternLoadError({
-                message: `Failed to read palette file: ${filePath}`,
-                cause: error
+                message: `No JSON palette files found in ${directoryPath}`
               })
+            )
+          }
+
+          const palettes = yield* Effect.forEach(
+            jsonFiles,
+            (file) =>
+              Effect.gen(function*() {
+                const filePath = yield* joinAsFilePath(path, directoryPath, file)
+                return yield* loadPalette(filePath)
+              }),
+            { concurrency: "unbounded" }
           )
-        )
 
-        const jsonData = yield* parseJson(fileContent, filePath)
-
-        const examplePalette = yield* ExamplePaletteRequest(jsonData).pipe(
-          Effect.mapError(
-            (error) =>
-              new PatternLoadError({
-                message: `Invalid palette schema: ${filePath}`,
-                cause: error
-              })
+          const pattern = yield* extractPatterns(palettes).pipe(
+            Effect.mapError(
+              (error) =>
+                new PatternLoadError({
+                  message: `Failed to extract patterns from directory: ${directoryPath}`,
+                  cause: error
+                })
+            )
           )
-        )
 
-        const stopsWithOKLCH = yield* Effect.forEach(
-          examplePalette.stops,
-          (stop) =>
-            Effect.gen(function*() {
-              const oklch = yield* parseColorStringToOKLCH(stop.hex)
-              return {
-                position: stop.position,
-                color: oklch
-              }
-            }),
-          { concurrency: "unbounded" }
-        ).pipe(
-          Effect.mapError(
-            (error) =>
-              new PatternLoadError({
-                message: `Failed to convert colors to OKLCH: ${filePath}`,
-                cause: error
-              })
-          )
-        )
+          const smoothedPattern = yield* smoothPatternWithError(pattern, directoryPath)
 
-        return {
-          name: examplePalette.name,
-          stops: stopsWithOKLCH
-        }
-      })
+          return {
+            palettes,
+            pattern: smoothedPattern
+          }
+        })
 
-    /**
-     * Load pattern from file, extract and smooth transformations
-     */
-    const loadPattern = (
-      source: FilePath
-    ): Effect.Effect<TransformationPattern, PatternLoadError> =>
-      Effect.gen(function*() {
-        const palette = yield* loadPalette(source)
-        const pattern = yield* extractPatterns([palette]).pipe(
-          Effect.mapError(
-            (error) =>
-              new PatternLoadError({
-                message: `Failed to extract pattern from: ${source}`,
-                cause: error
-              })
-          )
-        )
-        return yield* smoothPatternWithError(pattern, source)
-      })
-
-    /**
-     * Load multiple palettes from directory and extract combined pattern
-     */
-    const loadPatternsFromDirectory = (
-      directoryPath: DirectoryPath
-    ): Effect.Effect<
-      {
-        readonly palettes: ReadonlyArray<AnalyzedPalette>
-        readonly pattern: TransformationPattern
-      },
-      PatternLoadError
-    > =>
-      Effect.gen(function*() {
-        const files = yield* fs.readDirectory(directoryPath).pipe(
-          Effect.mapError(
-            (error) =>
-              new PatternLoadError({
-                message: `Failed to read directory: ${directoryPath}`,
-                cause: error
-              })
-          )
-        )
-
-        const jsonFiles = filterJsonFiles(files)
-
-        if (jsonFiles.length === 0) {
-          return yield* Effect.fail(
-            new PatternLoadError({
-              message: `No JSON palette files found in ${directoryPath}`
-            })
-          )
-        }
-
-        const palettes = yield* Effect.forEach(
-          jsonFiles,
-          (file) =>
-            Effect.gen(function*() {
-              const filePath = yield* joinAsFilePath(path, directoryPath, file)
-              return yield* loadPalette(filePath)
-            }),
-          { concurrency: "unbounded" }
-        )
-
-        const pattern = yield* extractPatterns(palettes).pipe(
-          Effect.mapError(
-            (error) =>
-              new PatternLoadError({
-                message: `Failed to extract patterns from directory: ${directoryPath}`,
-                cause: error
-              })
-          )
-        )
-
-        const smoothedPattern = yield* smoothPatternWithError(pattern, directoryPath)
-
-        return {
-          palettes,
-          pattern: smoothedPattern
-        }
-      })
-
-    return {
-      loadPattern,
-      loadPalette,
-      loadPatternsFromDirectory
-    }
-  }),
-  dependencies: [NodeFileSystem.layer, NodePath.layer]
-}) {
+      return {
+        loadPattern,
+        loadPalette,
+        loadPatternsFromDirectory
+      }
+    }),
+    dependencies: [NodeFileSystem.layer, NodePath.layer]
+  })
+{
   /**
    * Test layer - same as Default since PatternService has no environment-specific behavior
    */
