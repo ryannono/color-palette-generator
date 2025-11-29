@@ -1,8 +1,4 @@
-/**
- * Batch mode palette generation handler
- *
- * Generates multiple palettes from a batch of color/stop pairs.
- */
+/** Generates multiple palettes from a batch of color/stop pairs. */
 
 import * as clack from "@clack/prompts"
 import { Array as Arr, Data, Effect, Exit, HashMap, Option as O, pipe } from "effect"
@@ -20,7 +16,49 @@ import { validateFormat } from "../../validation.js"
 // Constants
 // ============================================================================
 
-/** Log messages for batch mode operations */
+const DEFAULT_FALLBACK_STOP: StopPosition = 500
+
+// ============================================================================
+// Types
+// ============================================================================
+
+type ExecutionMode = Data.TaggedEnum<{
+  Interactive: object
+  Silent: object
+}>
+
+const ExecutionMode = Data.taggedEnum<ExecutionMode>()
+
+const isInteractiveMode = ExecutionMode.$is("Interactive")
+
+const toExecutionMode = (isInteractive: boolean): ExecutionMode =>
+  isInteractive ? ExecutionMode.Interactive() : ExecutionMode.Silent()
+
+type BatchModeOptions = {
+  readonly exportOpt: O.Option<string>
+  readonly exportPath: O.Option<string>
+  readonly formatOpt: O.Option<string>
+  readonly isInteractive: boolean
+  readonly nameOpt: O.Option<string>
+  readonly pairs: Arr.NonEmptyReadonlyArray<ParsedPair>
+  readonly pattern: string
+}
+
+type IndexedPair = {
+  readonly originalIndex: number
+  readonly pair: ParsedPair
+}
+
+type CompletePair = {
+  readonly color: string
+  readonly raw: string
+  readonly stop: StopPosition
+}
+
+// ============================================================================
+// Constants
+// ============================================================================
+
 const Messages = {
   foundColors: (count: number) => `Found ${count} color(s)`,
   generated: (count: number, partial: boolean) =>
@@ -33,56 +71,10 @@ const Messages = {
 }
 
 // ============================================================================
-// Types
-// ============================================================================
-
-/** Execution mode for CLI operations */
-type ExecutionMode = Data.TaggedEnum<{
-  Interactive: object
-  Silent: object
-}>
-
-const ExecutionMode = Data.taggedEnum<ExecutionMode>()
-
-/** Type guard for interactive mode */
-const isInteractiveMode = ExecutionMode.$is("Interactive")
-
-/** Convert boolean to ExecutionMode */
-const toExecutionMode = (isInteractive: boolean): ExecutionMode =>
-  isInteractive ? ExecutionMode.Interactive() : ExecutionMode.Silent()
-
-type BatchModeOptions = {
-  readonly exportOpt: O.Option<string>
-  readonly exportPath: O.Option<string>
-  readonly formatOpt: O.Option<string>
-  readonly isInteractive: boolean
-  readonly nameOpt: O.Option<string>
-  readonly pairs: ReadonlyArray<ParsedPair>
-  readonly pattern: string
-}
-
-/** Pair with its original index for tracking during completion */
-type IndexedPair = {
-  readonly originalIndex: number
-  readonly pair: ParsedPair
-}
-
-/** A pair with a guaranteed stop position (after completion) */
-type CompletePair = {
-  readonly color: string
-  readonly raw: string
-  readonly stop: StopPosition
-}
-
-// ============================================================================
 // Public API
 // ============================================================================
 
-/**
- * Handle batch mode palette generation
- *
- * Prompts for missing stops, generates palettes, and handles export.
- */
+/** Prompts for missing stops, generates palettes, and handles export. */
 export const handleBatchMode = ({
   exportOpt,
   exportPath,
@@ -94,19 +86,12 @@ export const handleBatchMode = ({
 }: BatchModeOptions) =>
   Effect.gen(function*() {
     const mode = toExecutionMode(isInteractive)
-
     yield* logWhenInteractive(clack.log.success, Messages.foundColors(pairs.length), mode)
 
-    // Complete pairs with missing stops
     const completedPairs = yield* completeMissingStops(pairs, mode)
-
-    // Convert to ColorAnchor array
     const colorAnchors = toColorAnchors(completedPairs)
-
-    // Get output format with validation
     const format = yield* validateFormat(formatOpt)
 
-    // Get group name
     const config = yield* ConfigService
     const configData = yield* config.getConfig()
     const groupName = yield* O.match(nameOpt, {
@@ -114,7 +99,6 @@ export const handleBatchMode = ({
       onSome: Effect.succeed
     })
 
-    // Generate batch palettes
     const service = yield* PaletteService
     const batchResult = yield* withSpinner(
       generateBatch(service, colorAnchors, format, groupName, pattern),
@@ -123,10 +107,7 @@ export const handleBatchMode = ({
       mode
     )
 
-    // Display results
     yield* displayBatch(batchResult)
-
-    // Handle export
     yield* handleExport(batchResult, exportOpt, exportPath)
 
     return batchResult
@@ -136,7 +117,6 @@ export const handleBatchMode = ({
 // Logging
 // ============================================================================
 
-/** Log a message only when in interactive mode using Effect.when */
 const logWhenInteractive = (
   logFn: (msg: string) => void,
   message: string,
@@ -154,9 +134,9 @@ const logWhenInteractive = (
 // Completion
 // ============================================================================
 
-/** Complete pairs that are missing stop positions by prompting user */
+/** Prompts user for missing stop positions and returns all pairs completed. */
 const completeMissingStops = (
-  pairs: ReadonlyArray<ParsedPair>,
+  pairs: Arr.NonEmptyReadonlyArray<ParsedPair>,
   mode: ExecutionMode
 ) =>
   Effect.gen(function*() {
@@ -168,22 +148,19 @@ const completeMissingStops = (
 
     yield* logWhenInteractive(clack.log.warn, Messages.missingStops(incomplete.length), mode)
 
-    // Prompt for each missing stop and collect completed pairs
     const nowComplete = yield* Effect.forEach(
       incomplete,
       ({ originalIndex, pair }) =>
-        Effect.gen(function*() {
-          const stop = yield* promptForStop(pair.color, originalIndex + 1)
-          return yield* setPairStop(pair, stop)
-        }),
+        pipe(
+          promptForStop(pair.color, originalIndex + 1),
+          Effect.flatMap((stop) => setPairStop(pair, stop))
+        ),
       { concurrency: 1 }
     )
 
-    // Merge complete pairs with newly completed ones, preserving original order
     return mergeCompletedPairs(pairs, nowComplete, incomplete)
   })
 
-/** Find pairs that are missing stop positions with their original indices */
 const findIncompletePairs = (pairs: ReadonlyArray<ParsedPair>): ReadonlyArray<IndexedPair> =>
   pipe(
     pairs,
@@ -194,60 +171,80 @@ const findIncompletePairs = (pairs: ReadonlyArray<ParsedPair>): ReadonlyArray<In
     )
   )
 
-/** Convert all pairs to CompletePairs (only valid when all have stops) */
-const toCompletePairs = (pairs: ReadonlyArray<ParsedPair>): ReadonlyArray<CompletePair> =>
+const pairHasStop = (
+  pair: ParsedPair
+): pair is ParsedPair & { readonly stop: StopPosition } => pair.stop !== undefined
+
+const toComplete = (pair: ParsedPair & { readonly stop: StopPosition }): CompletePair => ({
+  color: pair.color,
+  raw: pair.raw,
+  stop: pair.stop
+})
+
+const toCompletePairs = (
+  pairs: Arr.NonEmptyReadonlyArray<ParsedPair>
+): Arr.NonEmptyReadonlyArray<CompletePair> =>
   pipe(
     pairs,
-    Arr.filterMap((pair) =>
-      pair.stop !== undefined
-        ? O.some({ color: pair.color, raw: pair.raw, stop: pair.stop })
-        : O.none()
-    )
+    Arr.filter(pairHasStop),
+    Arr.match({
+      onEmpty: () => [toComplete({ ...Arr.headNonEmpty(pairs), stop: DEFAULT_FALLBACK_STOP })],
+      onNonEmpty: (nonEmpty) => Arr.map(nonEmpty, toComplete)
+    })
   )
 
-/** Merge completed pairs back into original order using immutable HashMap */
+const toIndexEntry = (
+  [{ originalIndex }, completed]: readonly [IndexedPair, ParsedPair]
+): readonly [number, ParsedPair] => [originalIndex, completed]
+
+/** Merges completed pairs back into original order preserving indices. */
 const mergeCompletedPairs = (
-  original: ReadonlyArray<ParsedPair>,
+  original: Arr.NonEmptyReadonlyArray<ParsedPair>,
   nowComplete: ReadonlyArray<ParsedPair>,
   incomplete: ReadonlyArray<IndexedPair>
-): ReadonlyArray<CompletePair> => {
+): Arr.NonEmptyReadonlyArray<CompletePair> => {
   const completedByIndex = pipe(
     incomplete,
     Arr.zip(nowComplete),
-    Arr.map(([{ originalIndex }, completed]) => [originalIndex, completed] as const),
+    Arr.map(toIndexEntry),
     HashMap.fromIterable
   )
 
-  return pipe(
+  const lookupOrKeep = (pair: ParsedPair, index: number): ParsedPair =>
+    pipe(
+      HashMap.get(completedByIndex, index),
+      O.getOrElse(() => pair)
+    )
+
+  const toCompletePairOption = (pair: ParsedPair): O.Option<CompletePair> =>
+    pair.stop !== undefined
+      ? O.some({ color: pair.color, raw: pair.raw, stop: pair.stop })
+      : O.none()
+
+  const merged = pipe(
     original,
-    Arr.filterMap((pair, index) => {
-      const merged = pipe(
-        HashMap.get(completedByIndex, index),
-        O.getOrElse(() => pair)
-      )
-      return merged.stop !== undefined
-        ? O.some({ color: merged.color, raw: merged.raw, stop: merged.stop })
-        : O.none()
-    })
+    Arr.filterMap((pair, index) => toCompletePairOption(lookupOrKeep(pair, index)))
   )
+
+  return Arr.match(merged, {
+    onEmpty: () => [toComplete({ ...Arr.headNonEmpty(original), stop: DEFAULT_FALLBACK_STOP })],
+    onNonEmpty: (nonEmpty) => nonEmpty
+  })
 }
 
 // ============================================================================
 // Conversion
 // ============================================================================
 
-/** Convert complete pairs to ColorAnchor array (no filtering needed) */
-const toColorAnchors = (pairs: ReadonlyArray<CompletePair>): ReadonlyArray<ColorAnchor> =>
-  pipe(
-    pairs,
-    Arr.map(({ color, stop }) => ({ color, stop }))
-  )
+const toColorAnchors = (
+  pairs: Arr.NonEmptyReadonlyArray<CompletePair>
+): Arr.NonEmptyReadonlyArray<ColorAnchor> => Arr.map(pairs, ({ color, stop }) => ({ color, stop }))
 
 // ============================================================================
 // Generation
 // ============================================================================
 
-/** Wrap an effect with spinner feedback when in interactive mode */
+/** Wraps an effect with spinner feedback in interactive mode. */
 const withSpinner = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
   startMessage: string,
@@ -272,10 +269,9 @@ const withSpinner = <A, E, R>(
     )
     : effect
 
-/** Generate batch palettes */
 const generateBatch = (
   service: PaletteService,
-  colorAnchors: ReadonlyArray<ColorAnchor>,
+  colorAnchors: Arr.NonEmptyReadonlyArray<ColorAnchor>,
   format: ColorSpace,
   groupName: string,
   pattern: string
@@ -291,7 +287,6 @@ const generateBatch = (
 // Export
 // ============================================================================
 
-/** Handle export if configured */
 const handleExport = (
   batchResult: BatchResult,
   exportOpt: O.Option<string>,

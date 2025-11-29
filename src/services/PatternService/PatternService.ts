@@ -10,7 +10,7 @@ import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import { Data, Effect, Either } from "effect"
 import { parseColorStringToOKLCH } from "../../domain/color/color.js"
 import { smoothPattern } from "../../domain/math/interpolation.js"
-import { ExamplePaletteInput } from "../../domain/palette/palette.schema.js"
+import { ExamplePaletteRequest } from "../../domain/palette/palette.schema.js"
 import type { AnalyzedPalette, TransformationPattern } from "../../domain/pattern/pattern.js"
 import { extractPatterns } from "../../domain/pattern/pattern.js"
 import { type DirectoryPath, type FilePath, FilePath as FilePathSchema } from "./filesystem.schema.js"
@@ -58,7 +58,7 @@ export class PatternService extends Effect.Service<PatternService>()("PatternSer
 
         const jsonData = yield* parseJson(fileContent, filePath)
 
-        const examplePalette = yield* ExamplePaletteInput(jsonData).pipe(
+        const examplePalette = yield* ExamplePaletteRequest(jsonData).pipe(
           Effect.mapError(
             (error) =>
               new PatternLoadError({

@@ -9,7 +9,7 @@ import { applyOpticalAppearance, oklchToHex, parseColorStringToOKLCH } from "../
 import { type ColorSpace, ColorSpace as decodeColorSpace } from "../../../../../domain/color/color.schema.js"
 import { ConfigService } from "../../../../../services/ConfigService.js"
 import { BatchResult, ISOTimestampSchema } from "../../../../../services/PaletteService/palette.schema.js"
-import type { TransformationBatch, TransformationInput } from "../../../../schemas/transformation.schema.js"
+import type { TransformationBatch, TransformationRequest } from "../../../../schemas/transformation.schema.js"
 import {
   buildExportConfig,
   displayPalette,
@@ -49,7 +49,7 @@ export const handleSingleTransformation = ({
   input,
   nameOpt,
   pattern
-}: TransformationOptions & { readonly input: TransformationInput }) =>
+}: TransformationOptions & { readonly input: TransformationRequest }) =>
   Effect.gen(function*() {
     const format = yield* parseFormat(formatOpt)
     const result = yield* transformAndGenerate(
@@ -131,7 +131,7 @@ export const handleBatchTransformations = ({
   nameOpt,
   pattern
 }: TransformationOptions & {
-  readonly inputs: ReadonlyArray<TransformationInput | TransformationBatch>
+  readonly inputs: ReadonlyArray<TransformationRequest | TransformationBatch>
 }) =>
   Effect.gen(function*() {
     const nestedResults = yield* Effect.forEach(
@@ -180,7 +180,7 @@ const parseFormat = (formatOpt: O.Option<string>) => decodeColorSpace(O.getOrEls
 const transformAndGenerate = (
   reference: string,
   target: string,
-  stop: TransformationInput["stop"],
+  stop: TransformationRequest["stop"],
   name: string,
   format: ColorSpace,
   pattern: string

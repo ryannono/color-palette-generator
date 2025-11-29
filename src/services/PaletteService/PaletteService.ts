@@ -1,8 +1,5 @@
 /**
- * Palette service for color palette generation
- *
- * Orchestrates PatternService and ConfigService to generate complete palettes
- * with support for single and batch generation.
+ * Palette service for color palette generation with pattern-based transformations.
  */
 
 import { Array, Data, Effect, Either, Layer, Schema } from "effect"
@@ -11,7 +8,7 @@ import { ColorError, oklchToHex, oklchToOKLAB, oklchToRGB, parseColorStringToOKL
 import type { ColorSpace, OKLABColor, OKLCHColor, RGBColor } from "../../domain/color/color.schema.js"
 import { generatePaletteFromStop } from "../../domain/palette/generator.js"
 import { ConfigService } from "../ConfigService.js"
-import { FilePath } from "../PatternService/filesystem.schema.js"
+import { FilePath, type FilePath as FilePathType } from "../PatternService/filesystem.schema.js"
 import { PatternService } from "../PatternService/index.js"
 import {
   type BatchRequest,
@@ -22,14 +19,18 @@ import {
 } from "./palette.schema.js"
 
 // ============================================================================
+// Types
+// ============================================================================
+
+type ColorConverter = (
+  color: OKLCHColor
+) => Effect.Effect<string, ColorError | ParseError>
+
+// ============================================================================
 // Errors
 // ============================================================================
 
-/**
- * Error when palette generation fails
- *
- * Wraps underlying errors from color parsing, pattern loading, or palette generation.
- */
+/** Wraps underlying errors from color parsing, pattern loading, or palette generation. */
 export class PaletteGenerationError extends Data.TaggedError(
   "PaletteGenerationError"
 )<{
@@ -38,15 +39,88 @@ export class PaletteGenerationError extends Data.TaggedError(
 }> {}
 
 // ============================================================================
+// Color Formatting
+// ============================================================================
+
+const formatRGB = (rgb: RGBColor): string =>
+  `rgb(${rgb.r}, ${rgb.g}, ${rgb.b}${rgb.alpha !== 1 ? `, ${rgb.alpha}` : ""})`
+
+const formatOKLCH = (color: OKLCHColor): string =>
+  `oklch(${(color.l * 100).toFixed(2)}% ${color.c.toFixed(3)} ${color.h.toFixed(1)}${
+    color.alpha !== 1 ? ` / ${color.alpha}` : ""
+  })`
+
+const formatOKLAB = (oklab: OKLABColor): string =>
+  `oklab(${(oklab.l * 100).toFixed(2)}% ${oklab.a.toFixed(3)} ${oklab.b.toFixed(3)}${
+    oklab.alpha !== 1 ? ` / ${oklab.alpha}` : ""
+  })`
+
+const colorConverters: Record<ColorSpace, ColorConverter> = {
+  hex: oklchToHex,
+  rgb: (color) => oklchToRGB(color).pipe(Effect.map(formatRGB)),
+  oklch: (color) => Effect.succeed(formatOKLCH(color)),
+  oklab: (color) => oklchToOKLAB(color).pipe(Effect.map(formatOKLAB))
+}
+
+const convertColor = (
+  color: OKLCHColor,
+  format: ColorSpace
+): Effect.Effect<string, ColorError | ParseError> => colorConverters[format](color)
+
+// ============================================================================
+// Internal Helpers
+// ============================================================================
+
+const wrapPaletteError = (inputColor: string) => (error: unknown) =>
+  new PaletteGenerationError({
+    message: `Failed to generate palette for ${inputColor}`,
+    cause: error
+  })
+
+const resolvePatternSource = (
+  input: PaletteRequest,
+  configPatternSource: FilePathType
+): Effect.Effect<FilePathType, PaletteGenerationError> =>
+  input.patternSource
+    ? FilePath(input.patternSource).pipe(
+      Effect.mapError(
+        (error) =>
+          new PaletteGenerationError({
+            message: `Invalid pattern source: ${input.patternSource}`,
+            cause: error
+          })
+      )
+    )
+    : Effect.succeed(configPatternSource)
+
+const formatPaletteStops = (
+  stops: ReadonlyArray<{ readonly color: OKLCHColor; readonly position: number }>,
+  outputFormat: ColorSpace
+) =>
+  Effect.forEach(
+    stops,
+    (stop) =>
+      convertColor(stop.color, outputFormat).pipe(
+        Effect.map((formatted) => ({
+          color: stop.color,
+          position: stop.position,
+          value: formatted
+        }))
+      ),
+    { concurrency: "unbounded" }
+  )
+
+const getCurrentISOTimestamp = Effect.clockWith((clock) =>
+  clock.currentTimeMillis.pipe(
+    Effect.map((millis) => Schema.decodeSync(ISOTimestampSchema)(new Date(millis).toISOString()))
+  )
+)
+
+// ============================================================================
 // Service
 // ============================================================================
 
-/**
- * Palette service using Effect.Service pattern
- *
- * Provides palette generation capabilities with dependency injection for
- * PatternService and ConfigService.
- */
+/** Provides palette generation with dependency injection for PatternService and ConfigService. */
 export class PaletteService extends Effect.Service<PaletteService>()(
   "PaletteService",
   {
@@ -54,34 +128,13 @@ export class PaletteService extends Effect.Service<PaletteService>()(
       const patternService = yield* PatternService
       const configService = yield* ConfigService
 
-      /**
-       * Generate a single palette from an input color and anchor stop
-       *
-       * Steps:
-       * 1. Parse input color string to OKLCH
-       * 2. Load transformation pattern (from input override or config)
-       * 3. Generate palette using pattern
-       * 4. Convert all stops to requested output format
-       * 5. Validate and return formatted result
-       */
       const generate = (
         input: PaletteRequest
       ): Effect.Effect<PaletteResult, PaletteGenerationError> =>
         Effect.gen(function*() {
           const { anchorStop, inputColor, outputFormat, paletteName } = input
-
           const config = yield* configService.getConfig()
-          const patternSource = input.patternSource
-            ? yield* FilePath(input.patternSource).pipe(
-              Effect.mapError(
-                (error) =>
-                  new PaletteGenerationError({
-                    message: `Invalid pattern source: ${input.patternSource}`,
-                    cause: error
-                  })
-              )
-            )
-            : config.patternSource
+          const patternSource = yield* resolvePatternSource(input, config.patternSource)
 
           const oklchColor = yield* parseColorStringToOKLCH(inputColor)
           const pattern = yield* patternService.loadPattern(patternSource)
@@ -92,18 +145,7 @@ export class PaletteService extends Effect.Service<PaletteService>()(
             paletteName
           )
 
-          const formattedStops = yield* Effect.forEach(
-            palette.stops,
-            (stop) =>
-              convertColor(stop.color, outputFormat).pipe(
-                Effect.map((formatted) => ({
-                  color: stop.color,
-                  position: stop.position,
-                  value: formatted
-                }))
-              ),
-            { concurrency: "unbounded" }
-          )
+          const formattedStops = yield* formatPaletteStops(palette.stops, outputFormat)
 
           return yield* PaletteResult({
             anchorStop,
@@ -112,25 +154,11 @@ export class PaletteService extends Effect.Service<PaletteService>()(
             outputFormat,
             stops: formattedStops
           })
-        }).pipe(
-          Effect.mapError(
-            (error) =>
-              new PaletteGenerationError({
-                message: `Failed to generate palette for ${input.inputColor}`,
-                cause: error
-              })
-          )
-        )
+        }).pipe(Effect.mapError(wrapPaletteError(input.inputColor)))
 
-      /**
-       * Generate multiple palettes in batch with partial success support
-       *
-       * Generates palettes in parallel. Individual failures don't stop the batch -
-       * successful palettes are returned with a partial flag indicating if any failed.
-       */
       const generateBatch = (
         input: BatchRequest
-      ): Effect.Effect<BatchResult, never> =>
+      ): Effect.Effect<BatchResult, PaletteGenerationError> =>
         Effect.gen(function*() {
           const results = yield* Effect.forEach(
             input.pairs,
@@ -147,19 +175,21 @@ export class PaletteService extends Effect.Service<PaletteService>()(
             { concurrency: "unbounded" }
           )
 
-          const palettes = Array.getSomes(results.map(Either.getRight))
+          const successfulPalettes = Array.getSomes(Array.map(results, Either.getRight))
 
-          const generatedAt = yield* Effect.clockWith((clock) =>
-            clock.currentTimeMillis.pipe(
-              Effect.map((millis) => Schema.decodeSync(ISOTimestampSchema)(new Date(millis).toISOString()))
+          if (!Array.isNonEmptyReadonlyArray(successfulPalettes)) {
+            return yield* Effect.fail(
+              new PaletteGenerationError({ message: "All palette generations failed" })
             )
-          )
+          }
+
+          const generatedAt = yield* getCurrentISOTimestamp
 
           return {
             groupName: input.paletteGroupName,
             outputFormat: input.outputFormat,
-            palettes,
-            partial: palettes.length < results.length,
+            palettes: successfulPalettes,
+            partial: successfulPalettes.length < results.length,
             generatedAt
           }
         })
@@ -172,55 +202,8 @@ export class PaletteService extends Effect.Service<PaletteService>()(
     dependencies: [PatternService.Default, ConfigService.Default]
   }
 ) {
-  /**
-   * Test layer with test dependencies
-   *
-   * Uses ConfigService.Test and PatternService.Test for predictable test behavior.
-   */
+  /** Test layer using ConfigService.Test and PatternService.Test for predictable behavior. */
   static readonly Test = PaletteService.DefaultWithoutDependencies.pipe(
     Layer.provide(Layer.mergeAll(PatternService.Test, ConfigService.Test))
   )
 }
-
-// ============================================================================
-// Color Formatting Helpers
-// ============================================================================
-
-/** Format RGB color as CSS rgb() string */
-const formatRGB = (rgb: RGBColor): string =>
-  `rgb(${rgb.r}, ${rgb.g}, ${rgb.b}${rgb.alpha !== 1 ? `, ${rgb.alpha}` : ""})`
-
-/** Format OKLCH color as CSS oklch() string */
-const formatOKLCH = (color: OKLCHColor): string =>
-  `oklch(${(color.l * 100).toFixed(2)}% ${color.c.toFixed(3)} ${
-    color.h.toFixed(
-      1
-    )
-  }${color.alpha !== 1 ? ` / ${color.alpha}` : ""})`
-
-/** Format OKLAB color as CSS oklab() string */
-const formatOKLAB = (oklab: OKLABColor): string =>
-  `oklab(${(oklab.l * 100).toFixed(2)}% ${oklab.a.toFixed(3)} ${
-    oklab.b.toFixed(
-      3
-    )
-  }${oklab.alpha !== 1 ? ` / ${oklab.alpha}` : ""})`
-
-/** Color converter function type */
-type ColorConverter = (
-  color: OKLCHColor
-) => Effect.Effect<string, ColorError | ParseError>
-
-/** Color format converters lookup table */
-const colorConverters: Record<ColorSpace, ColorConverter> = {
-  hex: oklchToHex,
-  rgb: (color) => oklchToRGB(color).pipe(Effect.map(formatRGB)),
-  oklch: (color) => Effect.succeed(formatOKLCH(color)),
-  oklab: (color) => oklchToOKLAB(color).pipe(Effect.map(formatOKLAB))
-}
-
-/** Convert OKLCH color to requested output format as CSS string */
-const convertColor = (
-  color: OKLCHColor,
-  format: ColorSpace
-): Effect.Effect<string, ColorError | ParseError> => colorConverters[format](color)

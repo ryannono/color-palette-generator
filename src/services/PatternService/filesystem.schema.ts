@@ -6,6 +6,23 @@
 
 import { Schema } from "effect"
 
+// ============================================================================
+// Validation Helpers
+// ============================================================================
+
+/** Check if path contains null bytes (invalid in file systems) */
+const hasNullBytes = (path: string): boolean => path.includes("\0")
+
+/** Check if path has surrounding whitespace */
+const hasSurroundingWhitespace = (path: string): boolean => path.trim() !== path
+
+/** Validate file path does not contain invalid characters */
+const isValidFilePath = (path: string): boolean => !hasNullBytes(path) && !hasSurroundingWhitespace(path)
+
+// ============================================================================
+// Schemas
+// ============================================================================
+
 /**
  * Absolute file path with validation
  *
@@ -15,13 +32,9 @@ import { Schema } from "effect"
  * - Has no surrounding whitespace
  */
 export const FilePathSchema = Schema.String.pipe(
-  Schema.nonEmptyString(),
-  Schema.filter((path) => {
-    if (path.includes("\0")) return false // Null bytes not allowed
-    if (path.trim() !== path) return false // No surrounding whitespace
-    return true
-  }, {
-    message: () => "Invalid file path: contains invalid characters or whitespace"
+  Schema.nonEmptyString({ message: () => "File path cannot be empty" }),
+  Schema.filter(isValidFilePath, {
+    message: () => "Invalid file path: must not contain null bytes or leading/trailing whitespace"
   }),
   Schema.brand("FilePath"),
   Schema.annotations({
@@ -48,23 +61,3 @@ export const DirectoryPathSchema = FilePathSchema.pipe(
 
 export type DirectoryPath = typeof DirectoryPathSchema.Type
 export const DirectoryPath = Schema.decodeUnknown(DirectoryPathSchema)
-
-/**
- * JSON file path with .json extension validation
- *
- * Ensures the path ends with .json extension.
- */
-export const JSONPathSchema = Schema.String.pipe(
-  Schema.nonEmptyString(),
-  Schema.filter((path) => path.endsWith(".json"), {
-    message: () => "JSON path must end with .json extension"
-  }),
-  Schema.brand("JSONPath"),
-  Schema.annotations({
-    identifier: "JSONPath",
-    description: "File path to JSON file"
-  })
-)
-
-export type JSONPath = typeof JSONPathSchema.Type
-export const JSONPath = Schema.decodeUnknown(JSONPathSchema)

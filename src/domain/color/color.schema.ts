@@ -13,28 +13,43 @@ import { Schema } from "effect"
 // ============================================================================
 
 /** Create a bounded number schema with inclusive range */
-const BoundedNumber = (min: number, max: number, title: string) =>
+const BoundedNumber = (
+  min: number,
+  max: number,
+  identifier: string,
+  description: string
+) =>
   Schema.Number.pipe(
     Schema.greaterThanOrEqualTo(min),
     Schema.lessThanOrEqualTo(max),
-    Schema.annotations({ title })
+    Schema.annotations({ identifier, description })
   )
 
 /** Create a bounded number schema with exclusive upper bound */
-const BoundedNumberExclusive = (min: number, maxExclusive: number, title: string) =>
+const BoundedNumberExclusive = (
+  min: number,
+  maxExclusive: number,
+  identifier: string,
+  description: string
+) =>
   Schema.Number.pipe(
     Schema.greaterThanOrEqualTo(min),
     Schema.lessThan(maxExclusive),
-    Schema.annotations({ title })
+    Schema.annotations({ identifier, description })
   )
 
 /** Create a bounded integer schema */
-const BoundedInt = (min: number, max: number, title: string) =>
+const BoundedInt = (
+  min: number,
+  max: number,
+  identifier: string,
+  description: string
+) =>
   Schema.Number.pipe(
     Schema.int(),
     Schema.greaterThanOrEqualTo(min),
     Schema.lessThanOrEqualTo(max),
-    Schema.annotations({ title })
+    Schema.annotations({ identifier, description })
   )
 
 // ============================================================================
@@ -42,19 +57,19 @@ const BoundedInt = (min: number, max: number, title: string) =>
 // ============================================================================
 
 /** Lightness (0-1) - shared by OKLCH and OKLAB */
-const LightnessSchema = BoundedNumber(0, 1, "Lightness")
+const LightnessSchema = BoundedNumber(0, 1, "Lightness", "Lightness value (0 = black, 1 = white)")
 
 /** Chroma for OKLCH (0-0.5) */
-const ChromaSchema = BoundedNumber(0, 0.5, "Chroma")
+const ChromaSchema = BoundedNumber(0, 0.5, "Chroma", "Chroma value (0 = gray, 0.5 = maximum saturation)")
 
 /** Hue angle (0 <= h < 360) */
-const HueSchema = BoundedNumberExclusive(0, 360, "Hue")
+const HueSchema = BoundedNumberExclusive(0, 360, "Hue", "Hue angle in degrees (0 = red, 120 = green, 240 = blue)")
 
 /** RGB channel (0-255 integer) */
-const RGBChannelSchema = (title: string) => BoundedInt(0, 255, title)
+const RGBChannelSchema = (channel: string) => BoundedInt(0, 255, channel, `${channel} channel value (0-255)`)
 
 /** Alpha channel (0-1) */
-const AlphaSchema = BoundedNumber(0, 1, "Alpha")
+const AlphaSchema = BoundedNumber(0, 1, "Alpha", "Alpha/opacity value (0 = transparent, 1 = opaque)")
 
 /** Optional alpha with default of 1 */
 const OptionalAlpha = Schema.optionalWith(AlphaSchema, { default: () => 1 })
@@ -129,9 +144,11 @@ export type RGBColor = typeof RGBColorSchema.Type
 
 /** Hex color schema (branded string: #RRGGBB or #RRGGBBAA) */
 export const HexColorSchema = Schema.String.pipe(
-  Schema.pattern(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/),
+  Schema.pattern(/^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/, {
+    message: () => "Invalid hex color format: expected #RRGGBB or #RRGGBBAA (e.g., #2D72D2 or #2D72D2FF)"
+  }),
   Schema.filter(canParseHexCulori, {
-    message: () => "Invalid color: could not be parsed by culori"
+    message: () => "Invalid hex color: could not be parsed by culori"
   }),
   Schema.brand("HexColor"),
   Schema.annotations({

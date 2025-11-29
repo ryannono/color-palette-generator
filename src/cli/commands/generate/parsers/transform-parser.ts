@@ -12,15 +12,15 @@ import { ParseError } from "effect/ParseResult"
 import { ColorError } from "../../../../domain/color/color.js"
 import type {
   PartialTransformationBatch,
-  PartialTransformationInput,
+  PartialTransformationRequest,
   TransformationBatch,
-  TransformationInput
+  TransformationRequest
 } from "../../../schemas/transformation.schema.js"
 import {
   PartialTransformationBatch as PartialTransformationBatchDecoder,
-  PartialTransformationInput as PartialTransformationInputDecoder,
+  PartialTransformationRequest as PartialTransformationRequestDecoder,
   TransformationBatch as TransformationBatchDecoder,
-  TransformationInput as TransformationInputDecoder
+  TransformationRequest as TransformationRequestDecoder
 } from "../../../schemas/transformation.schema.js"
 
 /**
@@ -38,7 +38,7 @@ import {
 export const parseTransformationString = (
   input: string
 ): Effect.Effect<
-  TransformationInput | PartialTransformationInput,
+  TransformationRequest | PartialTransformationRequest,
   ColorError | ParseError
 > =>
   Effect.gen(function*() {
@@ -101,7 +101,7 @@ export const parseTransformationString = (
 
     if (!stopStr) {
       // Return partial transformation (stop will be prompted for)
-      return yield* PartialTransformationInputDecoder({
+      return yield* PartialTransformationRequestDecoder({
         reference,
         target
       })
@@ -110,7 +110,7 @@ export const parseTransformationString = (
     const stop = parseInt(stopStr, 10)
 
     // Validate with schema
-    return yield* TransformationInputDecoder({
+    return yield* TransformationRequestDecoder({
       reference,
       target,
       stop
@@ -247,9 +247,9 @@ export const isOneToManyTransformation = (input: string): boolean => {
 export const parseAnyTransformation = (
   input: string
 ): Effect.Effect<
-  | TransformationInput
+  | TransformationRequest
   | TransformationBatch
-  | PartialTransformationInput
+  | PartialTransformationRequest
   | PartialTransformationBatch,
   ColorError | ParseError
 > =>
@@ -309,7 +309,7 @@ const splitByCommaOutsideParens = (input: string): Array<string> => {
 export const parseBatchTransformations = (
   input: string
 ): Effect.Effect<
-  Array<TransformationInput | TransformationBatch | PartialTransformationInput | PartialTransformationBatch>,
+  Array<TransformationRequest | TransformationBatch | PartialTransformationRequest | PartialTransformationBatch>,
   ColorError | ParseError
 > => {
   // Split by newlines first
