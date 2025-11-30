@@ -21,7 +21,7 @@ import {
   type ExportTarget as ExportTargetType,
   JSONPath,
   type JSONPath as JSONPathType
-} from "../services/ExportService/export.schema.js"
+} from "../io/io.schema.js"
 import { CancelledError, PromptService } from "../services/PromptService/index.js"
 
 // ============================================================================

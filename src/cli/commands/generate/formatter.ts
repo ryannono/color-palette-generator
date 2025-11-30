@@ -5,15 +5,15 @@
  * and handling export operations.
  */
 
-import { FileSystem } from "@effect/platform"
+import { FileSystem, Path } from "@effect/platform"
 import { Array as Arr, Effect, Option as O, ParseResult, pipe } from "effect"
 import type { ColorSpace } from "../../../domain/color/color.schema.js"
 import type { BatchResult, PaletteResult, StopPosition } from "../../../domain/palette/palette.schema.js"
+import { makeFileExporter } from "../../../io/exporter.js"
+import type { ExportConfig, JSONPath as JSONPathType } from "../../../io/io.schema.js"
+import { JSONPath } from "../../../io/io.schema.js"
 import { makeFilePatternLoader } from "../../../io/patternLoader.js"
 import { ConsoleService } from "../../../services/ConsoleService/index.js"
-import type { ExportConfig, JSONPath as JSONPathType } from "../../../services/ExportService/export.schema.js"
-import { JSONPath } from "../../../services/ExportService/export.schema.js"
-import { ExportService } from "../../../services/ExportService/index.js"
 import { CancelledError, PromptService } from "../../../services/PromptService/index.js"
 import { generatePalette } from "../../../usecases/generatePalette.js"
 import { promptForJsonPath } from "../../prompts.js"
@@ -146,8 +146,10 @@ export const buildExportConfig = (
  */
 export const executePaletteExport = (palette: PaletteResult, config: ExportConfig) =>
   Effect.gen(function*() {
-    const exportService = yield* ExportService
-    yield* exportService.exportPalette(palette, config)
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const exportData = makeFileExporter(fs, path)
+    yield* exportData(palette, config)
     yield* logExportSuccess(config)
   })
 
@@ -159,8 +161,10 @@ export const executePaletteExport = (palette: PaletteResult, config: ExportConfi
  */
 export const executeBatchExport = (batch: BatchResult, config: ExportConfig) =>
   Effect.gen(function*() {
-    const exportService = yield* ExportService
-    yield* exportService.exportBatch(batch, config)
+    const fs = yield* FileSystem.FileSystem
+    const path = yield* Path.Path
+    const exportData = makeFileExporter(fs, path)
+    yield* exportData(batch, config)
     yield* logExportSuccess(config)
   })
 

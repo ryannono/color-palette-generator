@@ -15,8 +15,8 @@ import {
 import { CONFIG_DEFAULTS } from "../config/defaults.js"
 import type { ColorSpace } from "../domain/color/color.schema.js"
 import { ColorSpaceSchema } from "../domain/color/color.schema.js"
-import { FilePathSchema } from "./PatternService/filesystem.schema.js"
-import type { FilePath as FilePathType } from "./PatternService/filesystem.schema.js"
+import { FilePathSchema } from "../io/io.schema.js"
+import type { FilePath as FilePathType } from "../io/io.schema.js"
 
 // ============================================================================
 // Types

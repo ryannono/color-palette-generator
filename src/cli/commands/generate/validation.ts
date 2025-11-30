@@ -7,8 +7,8 @@
 
 import { Effect, Option as O, pipe } from "effect"
 import type { ParseError } from "effect/ParseResult"
+import { ExportTarget, type ExportTarget as ExportTargetType } from "../../../io/io.schema.js"
 import { ConsoleService } from "../../../services/ConsoleService/index.js"
-import { ExportTarget, type ExportTarget as ExportTargetType } from "../../../services/ExportService/export.schema.js"
 import { CancelledError, PromptService } from "../../../services/PromptService/index.js"
 import { promptForExportTarget } from "../../prompts.js"
 
