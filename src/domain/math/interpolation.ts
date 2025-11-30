@@ -2,7 +2,7 @@
  * Interpolation and smoothing utilities for color palette generation
  */
 
-import { Array as Arr, Data, Effect, Order } from "effect"
+import { Array as Arr, Data, Effect } from "effect"
 import type { StopPosition } from "../palette/palette.schema.js"
 import { STOP_POSITIONS } from "../palette/palette.schema.js"
 import type { StopTransform, TransformationPattern } from "../pattern/pattern.js"
@@ -39,6 +39,12 @@ const REFERENCE_MULTIPLIER = 1.0
 /** Range of stop positions for normalization */
 const STOP_RANGE = DARKEST_STOP - LIGHTEST_STOP // 900
 
+/** Degrees to radians conversion factor */
+export const DEG_TO_RAD = Math.PI / 180
+
+/** Radians to degrees conversion factor */
+export const RAD_TO_DEG = 180 / Math.PI
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -47,7 +53,7 @@ const STOP_RANGE = DARKEST_STOP - LIGHTEST_STOP // 900
  * Smooth the transformation pattern to ensure:
  * - Lightness is perfectly linear
  * - Chroma follows a smooth curve
- * - Hue is consistent (median value)
+ * - Hue is consistent (circular mean value)
  */
 export const smoothPattern = (
   pattern: TransformationPattern
@@ -81,6 +87,40 @@ export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t
 
 /** Clamp a value between min and max */
 export const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
+
+/**
+ * Calculate circular mean of angular values (handles wraparound at ±180°)
+ *
+ * Standard circular mean: convert angles to unit vectors, average, convert back.
+ * This correctly handles values clustered around the ±180° boundary.
+ *
+ * For example:
+ * - circularMean([-175, 175]) ≈ 180 (not 0)
+ * - circularMean([10, 20, 30]) = 20 (same as linear mean)
+ *
+ * @param angles - Array of angles in degrees
+ * @param onEmpty - Function to create error when array is empty
+ */
+export const circularMeanWith = <E>(
+  angles: ReadonlyArray<number>,
+  onEmpty: () => E
+): Effect.Effect<number, E> =>
+  Arr.match(angles, {
+    onEmpty: () => Effect.fail(onEmpty()),
+    onNonEmpty: (nonEmpty) => {
+      // Convert to unit vectors and sum
+      const sumSin = Arr.reduce(nonEmpty, 0, (sum, angle) => sum + Math.sin(angle * DEG_TO_RAD))
+      const sumCos = Arr.reduce(nonEmpty, 0, (sum, angle) => sum + Math.cos(angle * DEG_TO_RAD))
+
+      // Average the vectors
+      const avgSin = sumSin / nonEmpty.length
+      const avgCos = sumCos / nonEmpty.length
+
+      // Convert back to angle
+      const resultRad = Math.atan2(avgSin, avgCos)
+      return Effect.succeed(resultRad * RAD_TO_DEG)
+    }
+  })
 
 // ============================================================================
 // Pattern Smoothing Helpers
@@ -124,7 +164,7 @@ const smoothChromaCurve = (
 ): Effect.Effect<ReadonlyMap<StopPosition, number>, InterpolationError | CollectionError> =>
   createQuadraticInterpolation(pattern, (t) => t.chromaMultiplier)
 
-/** Calculate consistent hue shift using median of all values */
+/** Calculate consistent hue shift using circular mean of all values */
 const calculateConsistentHue = (
   pattern: TransformationPattern
 ): Effect.Effect<number, InterpolationError | CollectionError> =>
@@ -135,7 +175,7 @@ const calculateConsistentHue = (
       )
     )
   ).pipe(
-    Effect.flatMap(median)
+    Effect.flatMap(circularMean)
   )
 
 // ============================================================================
@@ -177,39 +217,12 @@ const createQuadraticInterpolation = (
 const normalizePosition = (position: StopPosition): number => (position - LIGHTEST_STOP) / STOP_RANGE
 
 // ============================================================================
-// Math Utilities
+// Circular Statistics Helpers
 // ============================================================================
 
-/** Calculate median of a non-empty array of numbers using functional composition */
-const median = (values: ReadonlyArray<number>): Effect.Effect<number, InterpolationError> =>
-  Arr.match(values, {
-    onEmpty: () => Effect.fail(new InterpolationError({ message: "Failed to calculate median: array is empty" })),
-    onNonEmpty: (nonEmpty) => {
-      const sorted = Arr.sort(nonEmpty, Order.number)
-      const mid = Math.floor(sorted.length / 2)
-
-      return sorted.length % 2 === 0 ? computeEvenMedian(sorted, mid) : computeOddMedian(sorted, mid)
-    }
-  })
-
-/** Compute median for even-length arrays using average of two middle elements */
-const computeEvenMedian = (
-  sorted: ReadonlyArray<number>,
-  mid: number
-): Effect.Effect<number, InterpolationError> =>
-  Effect.all([
-    Arr.get(sorted, mid - 1),
-    Arr.get(sorted, mid)
-  ]).pipe(
-    Effect.mapError(() => new InterpolationError({ message: "Array indexing failed during median calculation" })),
-    Effect.map(([a, b]) => (a + b) / 2)
-  )
-
-/** Compute median for odd-length arrays using middle element */
-const computeOddMedian = (
-  sorted: ReadonlyArray<number>,
-  mid: number
-): Effect.Effect<number, InterpolationError> =>
-  Arr.get(sorted, mid).pipe(
-    Effect.mapError(() => new InterpolationError({ message: "Array indexing failed during median calculation" }))
+/** Circular mean with InterpolationError */
+const circularMean = (angles: ReadonlyArray<number>): Effect.Effect<number, InterpolationError> =>
+  circularMeanWith(
+    angles,
+    () => new InterpolationError({ message: "Failed to calculate circular mean: array is empty" })
   )

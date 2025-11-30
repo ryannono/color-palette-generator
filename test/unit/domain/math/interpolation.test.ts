@@ -258,11 +258,11 @@ describe("Interpolation Math", () => {
         }
       })
 
-      it("should use median hue to eliminate outliers", () => {
+      it("should use circular mean to handle outliers gracefully", () => {
         // Create pattern with one outlier
         const pattern = createMockPattern(500)
         const transform100 = getTransformOrThrow(pattern, 100)
-        // Modify the pattern to have an outlier
+        // Modify the pattern to have an outlier at 100°
         const modifiedPattern = {
           ...pattern,
           transforms: new Map(pattern.transforms).set(100, { ...transform100, hueShiftDegrees: 100 })
@@ -271,19 +271,41 @@ describe("Interpolation Math", () => {
         const smoothed = Effect.runSync(smoothPattern(modifiedPattern))
         const consistentHue = getTransformOrThrow(smoothed, 500).hueShiftDegrees
 
-        // Consistent hue should not be affected by the outlier
-        expect(Math.abs(consistentHue)).toBeLessThan(10)
+        // Circular mean reduces outlier influence (unlike simple average which would be ~10)
+        // With 9 values near 0 and 1 at 100°, circular mean should be pulled slightly toward 100
+        // but still remain close to the cluster of values near 0
+        expect(Math.abs(consistentHue)).toBeLessThan(20)
       })
 
-      it("should handle even number of values (average of two middle values)", () => {
+      it("should calculate circular mean of small angles correctly", () => {
         const pattern = createMockPattern(500)
         const smoothed = Effect.runSync(smoothPattern(pattern))
 
-        // With 10 stops, median should be average of 5th and 6th values
-        // Values: -5, -4, -3, -2, -1, 0, 2, 3, 4, 5
-        // Sorted: -5, -4, -3, -2, -1, 0, 2, 3, 4, 5
-        // Median: (-1 + 0) / 2 = -0.5
-        expect(getTransformOrThrow(smoothed, 500).hueShiftDegrees).toBeCloseTo(-0.5, 1)
+        // Circular mean of values: -5, -4, -3, -2, -1, 0, 2, 3, 4, 5
+        // These are already in degrees - circular mean should be close to their arithmetic mean
+        // Arithmetic mean = (-5-4-3-2-1+0+2+3+4+5)/10 = -0.1
+        // For small angles, circular mean ≈ arithmetic mean
+        expect(getTransformOrThrow(smoothed, 500).hueShiftDegrees).toBeCloseTo(-0.1, 1)
+      })
+
+      it("should handle hue values near ±180° boundary correctly", () => {
+        // Create pattern with hue shifts clustered around ±180°
+        const pattern = createMockPattern(500)
+        const transforms = new Map(pattern.transforms)
+        // Set hue shifts to cluster around ±180: -175, 175, -178, 178, etc.
+        const hueShifts = [-175, 175, -178, 178, -170, 170, -172, 172, 180, -180]
+        STOP_POSITIONS.forEach((pos, i) => {
+          const existing = transforms.get(pos)!
+          transforms.set(pos, { ...existing, hueShiftDegrees: hueShifts[i] })
+        })
+        const modifiedPattern = { ...pattern, transforms }
+
+        const smoothed = Effect.runSync(smoothPattern(modifiedPattern))
+        const hue = getTransformOrThrow(smoothed, 500).hueShiftDegrees
+
+        // Circular mean should correctly identify that these cluster around ±180°
+        // (not 0°, which naive average would give)
+        expect(Math.abs(Math.abs(hue) - 180)).toBeLessThan(10)
       })
     })
 
