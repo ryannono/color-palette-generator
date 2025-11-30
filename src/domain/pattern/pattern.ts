@@ -5,6 +5,7 @@
 import { Array as Arr, Data, Effect, Option, Order } from "effect"
 import { hueDifference } from "../color/color.js"
 import type { OKLCHColor } from "../color/color.schema.js"
+import { circularMeanWith } from "../math/interpolation.js"
 import type { StopPosition } from "../palette/palette.schema.js"
 import { STOP_POSITIONS } from "../palette/palette.schema.js"
 import type { StopTransformMap } from "../types/collections.js"
@@ -182,16 +183,19 @@ const extractPaletteTransforms = (
  */
 const groupTransformsByStop = (
   transforms: ReadonlyArray<{ position: StopPosition; transform: StopTransform }>
-): ReadonlyMap<StopPosition, ReadonlyArray<StopTransform>> => {
-  const groups = Arr.groupBy(transforms, (item) => String(item.position))
-
-  return new Map(
-    Object.entries(groups).map(([key, items]) => [
-      Number(key) as StopPosition,
-      items.map((item) => item.transform)
-    ])
+): ReadonlyMap<StopPosition, ReadonlyArray<StopTransform>> =>
+  Arr.reduce(
+    transforms,
+    new Map<StopPosition, ReadonlyArray<StopTransform>>(),
+    (acc, { position, transform }) => {
+      const existing = Option.fromNullable(acc.get(position))
+      const updated = Option.match(existing, {
+        onNone: () => [transform],
+        onSome: (arr) => [...arr, transform]
+      })
+      return new Map(acc).set(position, updated)
+    }
   )
-}
 
 /**
  * Calculate aggregate transform for a stop position from multiple samples
@@ -237,20 +241,15 @@ const calculateStopTransform = (
       )
     )
 
-    const hueMedian = yield* median(hueValues).pipe(
-      Effect.mapError(
-        (cause) =>
-          new PatternExtractionError({
-            message: `Failed to calculate hue median for stop ${position}`,
-            cause
-          })
-      )
+    const hueMean = yield* circularMeanWith(
+      hueValues,
+      () => new PatternExtractionError({ message: `Failed to calculate hue mean for stop ${position}: array is empty` })
     )
 
     return {
       lightnessMultiplier: lightnessMedian,
       chromaMultiplier: chromaMedian,
-      hueShiftDegrees: hueMedian
+      hueShiftDegrees: hueMean
     }
   })
 
