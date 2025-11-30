@@ -9,7 +9,7 @@ import { FileSystem, Path } from "@effect/platform"
 import { NodeFileSystem, NodePath } from "@effect/platform-node"
 import clipboardy from "clipboardy"
 import { Data, Effect, Match } from "effect"
-import type { BatchResult, PaletteResult } from "../PaletteService/palette.schema.js"
+import type { BatchResult, PaletteResult } from "../../domain/palette/palette.schema.js"
 import type { ExportConfig } from "./export.schema.js"
 import { JSONPath } from "./export.schema.js"
 

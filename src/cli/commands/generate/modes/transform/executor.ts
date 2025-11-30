@@ -7,9 +7,8 @@
 import { Array as Arr, Effect, Option as O, pipe } from "effect"
 import { applyOpticalAppearance, oklchToHex, parseColorStringToOKLCH } from "../../../../../domain/color/color.js"
 import type { ColorSpace as ColorSpaceType } from "../../../../../domain/color/color.schema.js"
-import type { StopPosition } from "../../../../../domain/palette/palette.schema.js"
+import { BatchResult, ISOTimestamp, type StopPosition } from "../../../../../domain/palette/palette.schema.js"
 import { ConfigService } from "../../../../../services/ConfigService.js"
-import { BatchResult, ISOTimestamp } from "../../../../../services/PaletteService/palette.schema.js"
 import {
   buildExportConfig,
   displayPalette,

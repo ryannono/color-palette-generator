@@ -1,26 +1,18 @@
 /**
- * Palette generation schemas
+ * Palette service request schemas
  *
- * Request and result schemas for single and batch palette generation.
+ * Request schemas with service-specific defaults.
+ * Result schemas are in domain/palette/palette.schema.ts
  */
 
 import { Schema } from "effect"
 import { DEFAULT_BATCH_NAME, DEFAULT_PALETTE_NAME } from "../../config/constants.js"
 import { ColorSpaceSchema, ColorStringSchema } from "../../domain/color/color.schema.js"
-import { PaletteStopSchema, StopPositionSchema } from "../../domain/palette/palette.schema.js"
+import { ColorStopPairSchema, StopPositionSchema } from "../../domain/palette/palette.schema.js"
 
 // ============================================================================
 // Schema Combinators
 // ============================================================================
-
-/** Non-empty string combinator for required text fields */
-const NonEmptyString = Schema.String.pipe(
-  Schema.nonEmptyString({ message: () => "Value cannot be empty" }),
-  Schema.annotations({
-    identifier: "NonEmptyString",
-    description: "A string that cannot be empty"
-  })
-)
 
 /** Schema for pattern source string */
 const PatternSourceSchema = Schema.String.pipe(
@@ -34,53 +26,7 @@ const PatternSourceSchema = Schema.String.pipe(
 const OptionalPatternSource = Schema.optional(PatternSourceSchema)
 
 // ============================================================================
-// Component Schemas
-// ============================================================================
-
-/** Validated ISO 8601 timestamp */
-export const ISOTimestampSchema = Schema.String.pipe(
-  Schema.filter(
-    (s) => !isNaN(Date.parse(s)),
-    { message: () => "Invalid ISO 8601 timestamp" }
-  ),
-  Schema.brand("ISOTimestamp"),
-  Schema.annotations({
-    identifier: "ISOTimestamp",
-    description: "ISO 8601 formatted timestamp string"
-  })
-)
-
-export const ISOTimestamp = Schema.decodeUnknown(ISOTimestampSchema)
-export type ISOTimestamp = typeof ISOTimestampSchema.Type
-
-/** Color paired with its anchor stop position for batch operations */
-export const ColorStopPairSchema = Schema.Struct({
-  color: ColorStringSchema,
-  stop: StopPositionSchema
-}).pipe(
-  Schema.annotations({
-    identifier: "ColorStopPair",
-    description: "Color paired with its anchor stop position for palette generation"
-  })
-)
-
-export const ColorStopPair = Schema.decodeUnknown(ColorStopPairSchema)
-export type ColorStopPair = typeof ColorStopPairSchema.Type
-
-/** A palette stop with its formatted output value */
-export const FormattedStopSchema = PaletteStopSchema.pipe(
-  Schema.extend(Schema.Struct({ value: Schema.String })),
-  Schema.annotations({
-    identifier: "FormattedStop",
-    description: "Palette stop with computed color value in the requested output format"
-  })
-)
-
-export const FormattedStop = Schema.decodeUnknown(FormattedStopSchema)
-export type FormattedStop = typeof FormattedStopSchema.Type
-
-// ============================================================================
-// Single Palette Schemas
+// Single Palette Request
 // ============================================================================
 
 /** Request to generate a palette from a color and anchor stop */
@@ -102,39 +48,9 @@ export const PaletteRequestSchema = Schema.Struct({
 export const PaletteRequest = Schema.decodeUnknown(PaletteRequestSchema)
 export type PaletteRequest = typeof PaletteRequestSchema.Type
 
-/** Generated palette with formatted color values */
-export const PaletteResultSchema = Schema.Struct({
-  name: NonEmptyString,
-  inputColor: ColorStringSchema,
-  anchorStop: StopPositionSchema,
-  outputFormat: ColorSpaceSchema,
-  stops: Schema.Array(FormattedStopSchema).pipe(
-    Schema.itemsCount(10, { message: () => "Palette result must have exactly 10 stops" })
-  )
-}).pipe(
-  Schema.annotations({
-    identifier: "PaletteResult",
-    description: "Generated palette containing formatted color stops"
-  })
-)
-
-export const PaletteResult = Schema.decodeUnknown(PaletteResultSchema)
-export type PaletteResult = typeof PaletteResultSchema.Type
-
 // ============================================================================
-// Batch Palette Schemas
+// Batch Palette Request
 // ============================================================================
-
-/** A failed palette generation with error details */
-export const GenerationFailureSchema = ColorStopPairSchema.pipe(
-  Schema.extend(Schema.Struct({ error: Schema.String })),
-  Schema.annotations({
-    identifier: "GenerationFailure",
-    description: "Details of a failed palette generation attempt"
-  })
-)
-
-export type GenerationFailure = typeof GenerationFailureSchema.Type
 
 /** Request to generate multiple palettes in a single operation */
 export const BatchRequestSchema = Schema.Struct({
@@ -153,20 +69,3 @@ export const BatchRequestSchema = Schema.Struct({
 
 export const BatchRequest = Schema.decodeUnknown(BatchRequestSchema)
 export type BatchRequest = typeof BatchRequestSchema.Type
-
-/** Collection of generated palettes with metadata */
-export const BatchResultSchema = Schema.Struct({
-  groupName: NonEmptyString,
-  outputFormat: ColorSpaceSchema,
-  generatedAt: ISOTimestampSchema,
-  palettes: Schema.NonEmptyArray(PaletteResultSchema),
-  failures: Schema.optionalWith(Schema.Array(GenerationFailureSchema), { default: () => [] })
-}).pipe(
-  Schema.annotations({
-    identifier: "BatchResult",
-    description: "Result of batch palette generation containing multiple palettes with metadata"
-  })
-)
-
-export const BatchResult = Schema.decodeUnknown(BatchResultSchema)
-export type BatchResult = typeof BatchResultSchema.Type

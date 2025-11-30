@@ -6,13 +6,9 @@ import { FileSystem, Path } from "@effect/platform"
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Either, ParseResult, Schema } from "effect"
 import { vi } from "vitest"
+import { type BatchResult, ISOTimestampSchema, type PaletteResult } from "../../../src/domain/palette/palette.schema.js"
 import { MainTest } from "../../../src/layers/MainTest.js"
 import { ExportError, ExportService, JSONPath } from "../../../src/services/ExportService/index.js"
-import {
-  type BatchResult,
-  ISOTimestampSchema,
-  type PaletteResult
-} from "../../../src/services/PaletteService/palette.schema.js"
 
 import clipboardy from "clipboardy"
 

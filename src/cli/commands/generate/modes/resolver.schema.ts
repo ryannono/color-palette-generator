@@ -4,8 +4,7 @@
 
 import { Schema } from "effect"
 import { ColorStringSchema } from "../../../../domain/color/color.schema.js"
-import { StopPositionSchema } from "../../../../domain/palette/palette.schema.js"
-import { ColorStopPairSchema } from "../../../../services/PaletteService/palette.schema.js"
+import { ColorStopPairSchema, StopPositionSchema } from "../../../../domain/palette/palette.schema.js"
 import {
   PartialTransformationBatchSchema,
   PartialTransformationRequestSchema,

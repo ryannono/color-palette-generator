@@ -6,17 +6,16 @@ import { Array, Data, Effect, Either, Layer, Option as O, Schema } from "effect"
 import { parseColorStringToOKLCH } from "../../domain/color/color.js"
 import { formatPaletteStops } from "../../domain/color/formatter.js"
 import { generatePaletteFromStop } from "../../domain/palette/generator.js"
-import { ConfigService } from "../ConfigService.js"
-import { FilePath, type FilePath as FilePathType } from "../PatternService/filesystem.schema.js"
-import { PatternService } from "../PatternService/index.js"
 import {
-  type BatchRequest,
   type BatchResult,
   type GenerationFailure,
   ISOTimestampSchema,
-  type PaletteRequest,
   PaletteResult
-} from "./palette.schema.js"
+} from "../../domain/palette/palette.schema.js"
+import { ConfigService } from "../ConfigService.js"
+import { FilePath, type FilePath as FilePathType } from "../PatternService/filesystem.schema.js"
+import { PatternService } from "../PatternService/index.js"
+import { type BatchRequest, type PaletteRequest } from "./palette.schema.js"
 
 // ============================================================================
 // Errors

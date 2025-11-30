@@ -10,9 +10,9 @@
 import { FileSystem, Path } from "@effect/platform"
 import clipboardy from "clipboardy"
 import { Data, Effect, Match } from "effect"
+import type { BatchResult, PaletteResult } from "../domain/palette/palette.schema.js"
 import type { ExportConfig } from "../services/ExportService/export.schema.js"
 import { JSONPath } from "../services/ExportService/export.schema.js"
-import type { BatchResult, PaletteResult } from "../services/PaletteService/palette.schema.js"
 
 // ============================================================================
 // Errors

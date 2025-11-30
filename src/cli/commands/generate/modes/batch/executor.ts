@@ -2,9 +2,9 @@
 
 import { Array as Arr, Data, Effect, Exit, Option as O, pipe } from "effect"
 import type { ColorSpace } from "../../../../../domain/color/color.schema.js"
+import type { BatchResult, ColorStopPair } from "../../../../../domain/palette/palette.schema.js"
 import { ConsoleService } from "../../../../../services/ConsoleService/index.js"
 import { PaletteService } from "../../../../../services/PaletteService/index.js"
-import type { BatchResult, ColorStopPair } from "../../../../../services/PaletteService/palette.schema.js"
 import { buildExportConfig, displayBatch, executeBatchExport } from "../../formatter.js"
 import type { BatchPalettesComplete } from "../../inputSpecs/batchPalettes.input.js"
 

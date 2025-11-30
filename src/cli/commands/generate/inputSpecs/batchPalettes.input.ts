@@ -7,8 +7,11 @@
 
 import { Schema } from "effect"
 import { ColorSpaceSchema } from "../../../../domain/color/color.schema.js"
-import { PaletteNameSchema, StopPositionSchema } from "../../../../domain/palette/palette.schema.js"
-import { ColorStopPairSchema } from "../../../../services/PaletteService/palette.schema.js"
+import {
+  ColorStopPairSchema,
+  PaletteNameSchema,
+  StopPositionSchema
+} from "../../../../domain/palette/palette.schema.js"
 
 // ============================================================================
 // Complete Input Schema
