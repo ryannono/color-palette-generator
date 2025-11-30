@@ -160,21 +160,37 @@ export const isDisplayable = (
 ): Effect.Effect<boolean, never> => Effect.sync(() => culori.displayable(toCuloriOklch(color)))
 
 /**
- * Clamp a color to the displayable sRGB gamut by reducing chroma
+ * Clamp a color to the displayable sRGB gamut using perceptual gamut mapping.
+ *
+ * Uses culori's toGamut function which adjusts both lightness AND chroma
+ * to minimize perceptual difference (deltaE). This is superior to simple
+ * chroma clamping because it accounts for the Helmholtz-Kohlrausch effect
+ * where saturated colors appear brighter than their lightness value suggests.
+ *
+ * The algorithm produces colors closer to the original's perceptual appearance
+ * rather than preserving the exact lightness value at the cost of uniformity.
  */
 export const clampToGamut = (
   color: OKLCHColor
 ): Effect.Effect<OKLCHColor, ColorError> =>
   pipe(
     Effect.try({
-      try: () => culori.clampChroma(toCuloriOklch(color), "oklch"),
+      try: () => {
+        // Use CSS Color Level 4 gamut mapping algorithm:
+        // - dest: "rgb" (target sRGB gamut)
+        // - mode: "oklch" (perceptual color space for mapping)
+        // This adjusts both lightness and chroma to minimize deltaE
+        const gamutMapper = culori.toGamut("rgb", "oklch")
+        const mapped = gamutMapper(toCuloriOklch(color))
+        return culori.oklch(mapped)
+      },
       catch: (error) => colorError("Could not clamp OKLCH color to gamut", error)
     }),
     Effect.filterOrFail(
       (clamped): clamped is culori.Oklch => clamped !== undefined && clamped.mode === "oklch",
       () => colorError("Culori could not clamp color to gamut")
     ),
-    Effect.map((clamped) => mergeOklchWithFallback(clamped, color))
+    Effect.flatMap(fromCuloriOklch)
   )
 
 // ============================================================================
@@ -415,17 +431,6 @@ export const hueDifference = (h1: number, h2: number): number => {
 
 /** Clamp a value between min and max */
 export const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value))
-
-/** Merge OKLCH color with fallback values for undefined properties */
-const mergeOklchWithFallback = (
-  primary: Partial<OKLCHColor>,
-  fallback: OKLCHColor
-): OKLCHColor => ({
-  l: primary.l ?? fallback.l,
-  c: primary.c ?? fallback.c,
-  h: primary.h ?? fallback.h,
-  alpha: primary.alpha ?? fallback.alpha
-})
 
 /** Extract error message from unknown error */
 const formatErrorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error)
