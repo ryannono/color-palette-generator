@@ -25,10 +25,6 @@ import { PromptService } from "../services/PromptService/index.js"
  *   PromptService (CLI input, no deps)
  *   ModeResolver (CLI mode detection, no deps)
  *   WorkflowCoordinator (CLI workflow orchestration, no deps)
- *
- * Note: Pattern loading, palette generation, and exporting now use
- * use case functions with I/O capabilities passed as arguments
- * (see src/usecases/ and src/io/).
  */
 export const MainLive = Layer.mergeAll(
   ConfigService.Default,

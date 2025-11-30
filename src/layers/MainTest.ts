@@ -24,11 +24,6 @@ import { PromptService } from "../services/PromptService/index.js"
  * - `.Test` layers (pure): Same implementation as Default since the service
  *   is pure/deterministic with no side effects to mock
  *   (ModeResolver - just parses input syntax)
- *
- * Note: Pattern loading, palette generation, and exporting now use
- * use case functions with I/O capabilities passed as arguments
- * (see src/usecases/ and src/io/).
- * Tests use makeFilePatternLoader/makeFileExporter with real file fixtures.
  */
 export const MainTest = Layer.mergeAll(
   // Test implementations (mocked/scripted)

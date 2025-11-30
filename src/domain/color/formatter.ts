@@ -6,6 +6,7 @@
 
 import { Effect } from "effect"
 import type { ParseError } from "effect/ParseResult"
+import type { FormattedStop, PaletteStop } from "../palette/palette.schema.js"
 import type { ColorError } from "./color.js"
 import { oklchToHex, oklchToOKLAB, oklchToRGB } from "./color.js"
 import type { ColorSpace, OKLABColor, OKLCHColor, RGBColor } from "./color.schema.js"
@@ -38,13 +39,6 @@ const OKLAB_AXIS_PRECISION = 3
 
 /** Function that converts an OKLCH color to a formatted string */
 export type ColorFormatter = (color: OKLCHColor) => Effect.Effect<string, ColorError | ParseError>
-
-/** A palette stop with its formatted output value */
-export interface FormattedStop {
-  readonly color: OKLCHColor
-  readonly position: number
-  readonly value: string
-}
 
 // ============================================================================
 // Internal Helpers
@@ -121,14 +115,14 @@ export const formatColor = (
  * @returns Effect containing array of formatted stops
  */
 export const formatPaletteStops = (
-  stops: ReadonlyArray<{ readonly color: OKLCHColor; readonly position: number }>,
+  stops: ReadonlyArray<PaletteStop>,
   outputFormat: ColorSpace
 ): Effect.Effect<ReadonlyArray<FormattedStop>, ColorError | ParseError> =>
   Effect.forEach(
     stops,
     (stop) =>
       formatColor(stop.color, outputFormat).pipe(
-        Effect.map((value) => ({
+        Effect.map((value): FormattedStop => ({
           color: stop.color,
           position: stop.position,
           value

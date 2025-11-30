@@ -5,14 +5,15 @@
  * Pattern is loaded once and reused for all palette generations.
  */
 
-import { Array as Arr, Data, Effect, Either, Option as O, Schema } from "effect"
+import { Array as Arr, Data, Effect, Either, Option as O } from "effect"
 import type { ColorSpace } from "../domain/color/color.schema.js"
 import {
   type BatchResult,
+  type ColorStopPair,
   type GenerationFailure,
-  ISOTimestampSchema,
-  type PaletteResult,
-  type StopPosition
+  ISOTimestamp,
+  type ISOTimestamp as ISOTimestampType,
+  type PaletteResult
 } from "../domain/palette/palette.schema.js"
 import type { LoadPattern, PatternLoadError } from "../io/patternLoader.js"
 import { GeneratePaletteError, generatePaletteWithPattern } from "./generatePalette.js"
@@ -30,12 +31,6 @@ export class BatchGenerationError extends Data.TaggedError("BatchGenerationError
 // ============================================================================
 // Types
 // ============================================================================
-
-/** A color paired with its anchor stop position */
-export interface ColorStopPair {
-  readonly color: string
-  readonly stop: StopPosition
-}
 
 /** Input for generating a batch of palettes */
 export interface GenerateBatchInput {
@@ -134,9 +129,19 @@ const formatFailures = (failures: ReadonlyArray<GenerationFailure>): string =>
   Arr.map(failures, (f) => `${f.color} (${f.error})`).join(", ")
 
 /** Get current timestamp in ISO format */
-const getCurrentISOTimestamp = () =>
+const getCurrentISOTimestamp = (): Effect.Effect<ISOTimestampType, BatchGenerationError> =>
   Effect.clockWith((clock) =>
     clock.currentTimeMillis.pipe(
-      Effect.map((millis) => Schema.decodeSync(ISOTimestampSchema)(new Date(millis).toISOString()))
+      Effect.flatMap((millis) =>
+        ISOTimestamp(new Date(millis).toISOString()).pipe(
+          Effect.mapError(
+            (cause) =>
+              new BatchGenerationError({
+                message: "Failed to encode timestamp",
+                cause
+              })
+          )
+        )
+      )
     )
   )

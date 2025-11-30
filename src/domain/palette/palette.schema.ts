@@ -12,7 +12,7 @@ import { ColorSpaceSchema, ColorStringSchema, HexColorSchema, OKLCHColorSchema }
 /**
  * Array of all valid stop positions (for iteration)
  */
-export const STOP_POSITIONS: ReadonlyArray<100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 | 1000> = [
+export const STOP_POSITIONS = [
   100,
   200,
   300,
@@ -23,7 +23,7 @@ export const STOP_POSITIONS: ReadonlyArray<100 | 200 | 300 | 400 | 500 | 600 | 7
   800,
   900,
   1000
-]
+] as const
 
 // ============================================================================
 // Component Schemas
@@ -180,12 +180,20 @@ export type ExamplePaletteRequest = typeof ExamplePaletteRequestSchema.Type
 // Result Schemas
 // ============================================================================
 
+// ============================================================================
+// Validation Helpers
+// ============================================================================
+
+/** Check if string is a valid ISO 8601 timestamp */
+const isValidISOTimestamp = (s: string): boolean => !isNaN(Date.parse(s))
+
+// ============================================================================
+// Result Schemas (continued)
+// ============================================================================
+
 /** Validated ISO 8601 timestamp */
 export const ISOTimestampSchema = Schema.String.pipe(
-  Schema.filter(
-    (s) => !isNaN(Date.parse(s)),
-    { message: () => "Invalid ISO 8601 timestamp" }
-  ),
+  Schema.filter(isValidISOTimestamp, { message: () => "Invalid ISO 8601 timestamp" }),
   Schema.brand("ISOTimestamp"),
   Schema.annotations({
     identifier: "ISOTimestamp",
@@ -209,6 +217,19 @@ export const ColorStopPairSchema = Schema.Struct({
 
 export const ColorStopPair = Schema.decodeUnknown(ColorStopPairSchema)
 export type ColorStopPair = typeof ColorStopPairSchema.Type
+
+/** Color/stop pair with optional stop for interactive prompting */
+export const PartialColorStopPairSchema = ColorStopPairSchema.pipe(
+  Schema.omit("stop"),
+  Schema.extend(Schema.Struct({ stop: Schema.optional(StopPositionSchema) })),
+  Schema.annotations({
+    identifier: "PartialColorStopPair",
+    description: "Color/stop pair with optional stop position for interactive prompting"
+  })
+)
+
+export const PartialColorStopPair = Schema.decodeUnknown(PartialColorStopPairSchema)
+export type PartialColorStopPair = typeof PartialColorStopPairSchema.Type
 
 /** A palette stop with its formatted output value */
 export const FormattedStopSchema = PaletteStopSchema.pipe(
