@@ -5,16 +5,17 @@
  * and handling export operations.
  */
 
-import { Effect, Option as O, ParseResult, pipe } from "effect"
+import { FileSystem } from "@effect/platform"
+import { Array as Arr, Effect, Option as O, ParseResult, pipe } from "effect"
 import type { ColorSpace } from "../../../domain/color/color.schema.js"
 import type { BatchResult, PaletteResult, StopPosition } from "../../../domain/palette/palette.schema.js"
+import { makeFilePatternLoader } from "../../../io/patternLoader.js"
 import { ConsoleService } from "../../../services/ConsoleService/index.js"
 import type { ExportConfig, JSONPath as JSONPathType } from "../../../services/ExportService/export.schema.js"
 import { JSONPath } from "../../../services/ExportService/export.schema.js"
 import { ExportService } from "../../../services/ExportService/index.js"
-import { PaletteService } from "../../../services/PaletteService/index.js"
-import { PaletteRequest } from "../../../services/PaletteService/palette.schema.js"
 import { CancelledError, PromptService } from "../../../services/PromptService/index.js"
+import { generatePalette } from "../../../usecases/generatePalette.js"
 import { promptForJsonPath } from "../../prompts.js"
 import { validateExportTarget } from "./validation.js"
 
@@ -54,8 +55,7 @@ type GenerateAndDisplayOptions = {
 /**
  * Generate a palette from color and stop position
  *
- * Creates a validated palette request and generates a complete palette
- * using the configured pattern source.
+ * Uses the generatePalette use case with filesystem pattern loader.
  */
 export const generateAndDisplay = ({
   color,
@@ -65,17 +65,19 @@ export const generateAndDisplay = ({
   stop
 }: GenerateAndDisplayOptions) =>
   Effect.gen(function*() {
-    const service = yield* PaletteService
+    const fs = yield* FileSystem.FileSystem
+    const loadPattern = makeFilePatternLoader(fs)
 
-    const input = yield* PaletteRequest({
-      anchorStop: stop,
-      inputColor: color,
-      outputFormat: format,
-      paletteName: name,
-      patternSource: pattern
-    })
-
-    return yield* service.generate(input)
+    return yield* generatePalette(
+      {
+        anchorStop: stop,
+        inputColor: color,
+        outputFormat: format,
+        paletteName: name,
+        patternSource: pattern
+      },
+      loadPattern
+    )
   })
 
 /**
@@ -168,7 +170,11 @@ export const executeBatchExport = (batch: BatchResult, config: ExportConfig) =>
 
 /** Format stops as indented list */
 const formatStopsList = (stops: PaletteResult["stops"]): string =>
-  stops.map((s) => `  ${s.position}: ${s.value}`).join("\n")
+  pipe(
+    stops,
+    Arr.map((s) => `  ${s.position}: ${s.value}`),
+    Arr.join("\n")
+  )
 
 /** Format single palette note with format line */
 const formatPaletteNote = (palette: PaletteResult): string =>
